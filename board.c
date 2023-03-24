@@ -57,9 +57,6 @@ void initialize_board() {
 			cells[i][j] = &EMPTY;
 		}
 	}
-
-	cells[2][2] = &KNIGHT_W;
-
 }
 
 void print_board_pieces(const char i, const char j, const char pi, const char pj, const char si, const char sj) {
@@ -124,7 +121,7 @@ void print_board(const char pi, const char pj, const char si, const char sj, con
 }
 
 
-int move_piece(const char fi, const char fj, const char ti, const char tj) { // "from" and "to" indeces. Move validation will be implemented here (function should return a status code)
+int move_piece(const char ti, const char tj, const char fi, const char fj) { // to" and "from" indeces (corresponfs to pi, pj, si, sj). Move validation will be implemented here (function should return a status code)
 	cells[ti][tj] = cells[fi][fj];
 	cells[fi][fj] = &EMPTY;
 

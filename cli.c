@@ -16,159 +16,134 @@
 #include "board.h"
 
 
-void name_fifo(char buffer[], int pid);
+static bool input(char movebuffer[], const char fifoname[], const bool white);
+
+static void wait(char movebuffer[], const char fifoname[]);
+
+static void name_fifo(char buffer[], int pid);
 
 
-int play(const bool white, const int game_id) {
-	static struct termios oldt, newt;
+int play(const bool white, const int game_id) { // This is the main routine in this file
+	SETUP_SHELL();
 
-    /*tcgetattr gets the parameters of the current terminal
-    STDIN_FILENO will tell tcgetattr that it should write the settings
-    of stdin to oldt*/
-    tcgetattr(STDIN_FILENO, &oldt);
-    /*now the settings will be copied*/
-    newt = oldt;
+	bool my_turn = white;
+	char fifoname[30];
+	char movebuffer[4];
 
-    /*ICANON normally takes care that one line at a time will be processed
-    that means it will return if it sees a "\n" or an EOF or an EOL*/
-    newt.c_lflag &= ~(ICANON);          
+	movebuffer[0] = 0;
+	movebuffer[1] = 0;
+	movebuffer[2] = -1;
+	movebuffer[3] = -1;
 
-    /*Those new settings will be set to STDIN
-    TCSANOW tells tcsetattr to change attributes immediately. */
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);	
+	initialize_board();
+	name_fifo(fifoname, game_id);
 
-    char c;
-    char pi, pj, si, sj;
-    bool selection_made, my_turn;
-    
-    int fd = -1; // descriptor for the pipe
-    char fifoname[30];
-    char movebuffer[4];
-
-    c = 0;
-    si = -1;
-    sj = -1;
-    selection_made = false;
-
-    initialize_board();
-
-    if (white) { // Guest process
-    	printf("Waiting for a guest to join. Game ID: %d\n", game_id);
-		my_turn = true;
-		pi = 0;
-    	pj = 0;
-    	name_fifo(fifoname, game_id);
-    	if (mkfifo(fifoname, 0666) == -1) {
-    		printf("%s\n", "Could not create FIFO!");
-    		return -1;
-    	}
-
+	int fd;
+	if (white) { 
+		if (mkfifo(fifoname, 0666) == -1) {
+			printf("%s\n", "Could not create FIFO!");
+			return -1;
+		}
+		printf("Waiting for a guest to join, Game ID: %d\n", game_id);
+		fd = open(fifoname, O_RDONLY); // Execution will block here, until the other player opens the fifo pipe for writing
+		close(fd);
 	}
-	else { // Host process
-    	my_turn = false;
-    	pi = BOARD_SIZE - 1;
-    	pj = BOARD_SIZE - 1;
-    	name_fifo(fifoname, game_id);
+	else {
+		fd = open(fifoname, O_WRONLY);
+		close(fd);
 	}
 
-	while (1) {
+	while (true) {
 		system("clear");
-		print_board(pi, pj, si, sj, !white);
+		print_board(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3], !white);
 
 		if (!my_turn) { // Block until other player makes move
-			if (fd != -1) close(fd);
-
-			fd = open(fifoname, O_RDONLY);
-			read(fd, movebuffer, 4);
-			move_piece(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3]);
+			wait(movebuffer, fifoname);
 			my_turn = true;
-
 			// At this point the input buffer should be cleared... to be implemented...
 			continue;
 		}
 
-		c = getchar();
-
-		if (white) {
-			if ((c == 'w' || c == 'W') && pi < BOARD_SIZE - 1) pi++;
-			else if ((c == 'a' || c == 'A') && pj > 0) pj--;
-			else if ((c == 's' || c == 'S') && pi > 0) pi--;
-			else if ((c == 'd' || c == 'D') && pj < BOARD_SIZE - 1) pj++;
-			else if (c == '\n') {
-				if (selection_made) {
-					if (move_piece(si, sj, pi, pj) == 0) { // move_piece should return 0 on success and 1 on an illegal move (To be implemented)
-						my_turn = false;
-						movebuffer[0] = si;
-						movebuffer[1] = sj;
-						movebuffer[2] = pi;
-						movebuffer[3] = pj;
-						fd = open(fifoname, O_WRONLY);
-						write(fd, movebuffer, 4);
-					}
-					si = -1;
-					sj = -1;
-					selection_made = false;
-				}
-				else {
-					si = pi;
-					sj = pj;
-					selection_made = true;
-				}
-			}
-			else if ((c == 'c' || c == 'C') && selection_made) { // Cancel selection
-				si = -1;
-				sj = -1;
-				selection_made = false;
-			}
-			else if ((c == 'l' || c == 'L')) {
-				remove(fifoname);
-				break;
-			}
-		}
-		else {
-			if ((c == 'w' || c == 'W') && pi > 0) pi--;
-			else if ((c == 'a' || c == 'A') && pj < BOARD_SIZE - 1) pj++;
-			else if ((c == 's' || c == 'S') && pi < BOARD_SIZE - 1) pi++;
-			else if ((c == 'd' || c == 'D') && pj > 0) pj--;
-			else if (c == '\n') {
-				if (selection_made) {
-					if (move_piece(si, sj, pi, pj) == 0) { // move_piece should return 0 on success and 1 on an illegal move (To be implemented)
-						my_turn = false;
-						movebuffer[0] = si;
-						movebuffer[1] = sj;
-						movebuffer[2] = pi;
-						movebuffer[3] = pj;
-						fd = open(fifoname, O_WRONLY);
-						write(fd, movebuffer, 4);
-					}
-					si = -1;
-					sj = -1;
-					selection_made = false;
-				}
-				else {
-					si = pi;
-					sj = pj;
-					selection_made = true;
-				}
-			}
-			else if ((c == 'c' || c == 'C') && selection_made) { // Cancel selection
-				si = -1;
-				sj = -1;
-				selection_made = false;
-			}
-			else if ((c == 'l' || c == 'L')) break;
-		}
+		my_turn = input(movebuffer, fifoname, white);		
 	}
 
-	/*restore the old settings*/
-	tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+	SHELL_BACK_TO_NORMAL();
 
 	return 0;
 }
 
 
+static bool input(char movebuffer[], const char fifoname[], const bool white) {
+	char* pi;
+	char* pj;
+	char* si;
+	char* sj;
+	pi = &movebuffer[0];
+	pj = &movebuffer[1];
+	si = &movebuffer[2];
+	sj = &movebuffer[3];
+	char c;
+	int fd;
+	static bool selection_made = false;
 
-void name_fifo(char buffer[], int pid) { // This function is very specific to what is done here...
+	c = getchar();
+
+	// The if statements can certaintly be optimized...
+
+	if (white) {
+		if ((c == 'w' || c == 'W') && *pi < BOARD_SIZE - 1) (*pi)++;
+		else if ((c == 'a' || c == 'A') && *pj > 0) (*pj)--;
+		else if ((c == 's' || c == 'S') && *pi > 0) (*pi)--;
+		else if ((c == 'd' || c == 'D') && *pj < BOARD_SIZE - 1) (*pj)++;
+	}
+	else {
+		if ((c == 'w' || c == 'W') && *pi > 0) (*pi)--;
+		else if ((c == 'a' || c == 'A') && *pj < BOARD_SIZE - 1) (*pj)++;
+		else if ((c == 's' || c == 'S') && *pi < BOARD_SIZE - 1) (*pi)++;
+		else if ((c == 'd' || c == 'D') && *pj > 0) (*pj)--;
+	}
+
+	if (c == '\n') {
+		if (selection_made) {
+			if (move_piece(*pi, *pj, *si, *sj) == 0) { // move_piece should return 0 on success and 1 on an illegal move (To be implemented)
+				fd = open(fifoname, O_WRONLY);
+				write(fd, movebuffer, 4);
+				close(fd);
+
+				*si = -1;
+				*sj = -1;
+				selection_made = false;
+
+				return false;
+			}
+		}
+		else {
+			*si = *pi;
+			*sj = *pj;
+			selection_made = true;
+		}
+	}
+	else if ((c == 'c' || c == 'C') && selection_made) { // Cancel selection
+		*si = -1;
+		*sj = -1;
+		selection_made = false;
+	}
+
+	return true;
+}
+
+static void wait(char movebuffer[], const char fifoname[]) {
+	int fd;
+	printf("%s\n", "Waiting for the other player to make a move...");
+	fd = open(fifoname, O_RDONLY); // Execution will block here, until the other player writes to the fifo
+	read(fd, movebuffer, 4);
+	close(fd);
+	move_piece(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3]);
+}
+
+
+
+static void name_fifo(char buffer[], int pid) { // This function is very specific to what is done here... it assigns a filename for the FIFO in the format /tmp/fifo_<PID>
 	int i, len;
 	strcpy(buffer, "/tmp/fifo_");
 	char buf[10];
@@ -190,3 +165,4 @@ void name_fifo(char buffer[], int pid) { // This function is very specific to wh
 
 	buffer[10 + len] = '\0';
 }
+

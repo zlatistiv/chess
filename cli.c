@@ -16,28 +16,7 @@
 #include "board.h"
 
 
-void name_fifo(char buffer[], int pid) { // This function is very specific to what is done here...
-	int i, len;
-	strcpy(buffer, "/tmp/fifo_");
-	char buf[10];
-	
-	i = 0;
-
-	do {
-		buf[i++] = pid % 10 + '0';
-
-	} while ((pid /= 10) > 0);
-
-	buf[i] = '\0';
-
-	len = i;
-
-	for (i = 0; buf[i] != '\0'; i++) {
-		buffer[i + 10] = buf[len - i - 1];
-	}
-
-	buffer[10 + len] = '\0';
-}
+void name_fifo(char buffer[], int pid);
 
 
 int play(const bool white, const int game_id) {
@@ -59,12 +38,12 @@ int play(const bool white, const int game_id) {
     tcsetattr(STDIN_FILENO, TCSANOW, &newt);	
 
     char c;
-    int pi, pj, si, sj;
+    char pi, pj, si, sj;
     bool selection_made, my_turn;
     
     int fd = -1; // descriptor for the pipe
     char fifoname[30];
-    int movebuffer[4];
+    char movebuffer[4];
 
     c = 0;
     si = -1;
@@ -97,15 +76,11 @@ int play(const bool white, const int game_id) {
 		print_board(pi, pj, si, sj, !white);
 
 		if (!my_turn) { // Block until other player makes move
-			// printf("%s\n", "Waiting for opponents move...");
 			if (fd != -1) close(fd);
 
 			fd = open(fifoname, O_RDONLY);
-			read(fd, movebuffer, sizeof(movebuffer));
-			printf("%d\n", movebuffer[0]);
-			printf("%d\n", movebuffer[1]);
-			printf("%d\n", movebuffer[2]);
-			printf("%d\n", movebuffer[3]);
+			read(fd, movebuffer, 4);
+			move_piece(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3]);
 			my_turn = true;
 
 			// At this point the input buffer should be cleared... to be implemented...
@@ -122,13 +97,13 @@ int play(const bool white, const int game_id) {
 			else if (c == '\n') {
 				if (selection_made) {
 					if (move_piece(si, sj, pi, pj) == 0) { // move_piece should return 0 on success and 1 on an illegal move (To be implemented)
-						// my_turn = false;
+						my_turn = false;
 						movebuffer[0] = si;
 						movebuffer[1] = sj;
 						movebuffer[2] = pi;
 						movebuffer[3] = pj;
-						// fd = open(fifoname, O_WRONLY);
-						// write(fd, movebuffer, sizeof(movebuffer));
+						fd = open(fifoname, O_WRONLY);
+						write(fd, movebuffer, 4);
 					}
 					si = -1;
 					sj = -1;
@@ -144,6 +119,10 @@ int play(const bool white, const int game_id) {
 				si = -1;
 				sj = -1;
 				selection_made = false;
+			}
+			else if ((c == 'l' || c == 'L')) {
+				remove(fifoname);
+				break;
 			}
 		}
 		else {
@@ -160,7 +139,7 @@ int play(const bool white, const int game_id) {
 						movebuffer[2] = pi;
 						movebuffer[3] = pj;
 						fd = open(fifoname, O_WRONLY);
-						write(fd, movebuffer, sizeof(movebuffer));
+						write(fd, movebuffer, 4);
 					}
 					si = -1;
 					sj = -1;
@@ -177,6 +156,7 @@ int play(const bool white, const int game_id) {
 				sj = -1;
 				selection_made = false;
 			}
+			else if ((c == 'l' || c == 'L')) break;
 		}
 	}
 
@@ -184,4 +164,29 @@ int play(const bool white, const int game_id) {
 	tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 
 	return 0;
+}
+
+
+
+void name_fifo(char buffer[], int pid) { // This function is very specific to what is done here...
+	int i, len;
+	strcpy(buffer, "/tmp/fifo_");
+	char buf[10];
+	
+	i = 0;
+
+	do {
+		buf[i++] = pid % 10 + '0';
+
+	} while ((pid /= 10) > 0);
+
+	buf[i] = '\0';
+
+	len = i;
+
+	for (i = 0; buf[i] != '\0'; i++) {
+		buffer[i + 10] = buf[len - i - 1];
+	}
+
+	buffer[10 + len] = '\0';
 }

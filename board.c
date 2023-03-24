@@ -62,7 +62,7 @@ void initialize_board() {
 
 }
 
-void print_board_pieces(const int i, const int j, const int pi, const int pj, const int si, const int sj) {
+void print_board_pieces(const char i, const char j, const char pi, const char pj, const char si, const char sj) {
 	if (i == si && j == sj) { // selected case
 		if ((i + j) % 2 == 0) {
 			printf("%s[", SELECTED_BLACK);
@@ -94,7 +94,7 @@ void print_board_pieces(const int i, const int j, const int pi, const int pj, co
 }
 
 
-void print_board(const int pi, const int pj, const int si, const int sj, const bool flipped) { // pointed and selected indeces
+void print_board(const char pi, const char pj, const char si, const char sj, const bool flipped) { // pointed and selected indeces
 	int i, j;
 
 	if (!flipped) {
@@ -124,7 +124,7 @@ void print_board(const int pi, const int pj, const int si, const int sj, const b
 }
 
 
-int move_piece(const int fi, const int fj, const int ti, const int tj) { // "from" and "to" indeces. Move validation will be implemented here (function should return a status code)
+int move_piece(const char fi, const char fj, const char ti, const char tj) { // "from" and "to" indeces. Move validation will be implemented here (function should return a status code)
 	cells[ti][tj] = cells[fi][fj];
 	cells[fi][fj] = &EMPTY;
 

@@ -13,5 +13,5 @@
 #define SELECTED_WHITE "\033[35m\033[44m"
 
 void initialize_board();
-void print_board(const int, const int, const int, const int, const bool);
-int move_piece(const int, const int, const int, const int);
+void print_board(const char, const char, const char, const char, const bool);
+int move_piece(const char, const char, const char, const char);

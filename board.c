@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
 
@@ -23,7 +24,6 @@ static char* QUEEN_B = "\xe2\x99\x95";
 static char* KING_B = "\xe2\x99\x94";
 
 static char* EMPTY = " ";
-
 
 void initialize_board() {
 	int i, j;
@@ -121,9 +121,51 @@ void print_board(const char pi, const char pj, const char si, const char sj, con
 }
 
 
-int move_piece(const char ti, const char tj, const char fi, const char fj) { // to" and "from" indeces (corresponfs to pi, pj, si, sj). Move validation will be implemented here (function should return a status code)
+int move_piece(const char ti, const char tj, const char fi, const char fj, const bool white) { // to" and "from" indeces (corresponfs to pi, pj, si, sj). i is the vertical index, j is the horizontal. Move validation will be implemented here (function should return a status code)
+	static int move_counter = 0;
+
+	if (cells[fi][fj] == &EMPTY) return -1;
+
+	if (white) {
+		if (cells[fi][fj] == &PAWN_B || cells[fi][fi] == &ROOK_B || cells[fi][fi] == &KNIGHT_B || cells[fi][fi] == &BISHOP_B || cells[fi][fi] == &QUEEN_B || cells[fi][fi] == &KING_B) return -1;
+		if (cells[ti][tj] == &PAWN_W || cells[fi][fi] == &ROOK_W || cells[fi][fi] == &KNIGHT_W || cells[fi][fi] == &BISHOP_W || cells[fi][fi] == &QUEEN_W || cells[fi][fi] == &KING_W) return -1;
+
+		if (cells[fi][fj] == &PAWN_W) {
+			
+		}
+		if (cells[fi][fj] == &ROOK_W) {
+			
+		}
+		if (cells[fi][fj] == &KNIGHT_W) {
+			
+		}
+		if (cells[fi][fj] == &BISHOP_W) {
+			
+		}
+		if (cells[fi][fj] == &QUEEN_W) {
+			
+		}
+		if (cells[fi][fj] == &KING_W) {
+			
+		}
+	}
+	else {
+		if (cells[fi][fj] == &PAWN_W || cells[fi][fi] == &ROOK_W || cells[fi][fi] == &KNIGHT_W || cells[fi][fi] == &BISHOP_W || cells[fi][fi] == &QUEEN_W || cells[fi][fi] == &KING_W) return -1;
+		if (cells[ti][tj] == &PAWN_B || cells[fi][fi] == &ROOK_B || cells[fi][fi] == &KNIGHT_B || cells[fi][fi] == &BISHOP_B || cells[fi][fi] == &QUEEN_B || cells[fi][fi] == &KING_B) return -1;
+	}
+
+	
+
+
 	cells[ti][tj] = cells[fi][fj];
 	cells[fi][fj] = &EMPTY;
 
+	move_counter++;
+
 	return 0;
+}
+
+void move_piece_unsafe(const char ti, const char tj, const char fi, const char fj) { // This is used to move the other players pieces
+	cells[ti][tj] = cells[fi][fj];
+	cells[fi][fj] = &EMPTY;
 }

@@ -1,6 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
+#include <stdbool.h>
+#include <unistd.h>
 #include "cli.h"
 
 
@@ -28,10 +30,10 @@ int main(const int argc, const char** argv) {
 		return 0;
 	}
 	else if (argc == 2 && (!strcmp(argv[1], "--host") || !strcmp(argv[1], "-h"))) {
-		status = play(1, getpid());
+		status = play(true, getpid());
 	}
 	else if (argc == 3 && (!strcmp(argv[1], "--join") || !strcmp(argv[1], "-j"))) {
-		status = play(0, atoi(argv[2]));
+		status = play(false, atoi(argv[2]));
 	}
 	else {
 		help_output();

@@ -16,19 +16,25 @@
 #include "board.h"
 
 
-static bool input(char movebuffer[], const char fifoname[], const bool white);
+static int input(char movebuffer[], const char fifoname[], const bool white);
 
 static void wait(char movebuffer[], const char fifoname[]);
 
 static void name_fifo(char buffer[], int pid);
+ 
+static const char *status_str[] = {
+	"Waiting for the other player to make a move...",
+	"Your turn.", // My turn
+	"Bad move! Please try again."
+};
 
 
 int play(const bool white, const int game_id) { // This is the main routine in this file
 	SETUP_SHELL();
 
-	bool my_turn = white;
 	char fifoname[30];
 	char movebuffer[4];
+	int status = white; // 0 -> waiting for other player; 1 -> my move; 2 -> my move but my last move was illegal
 
 	movebuffer[0] = 0;
 	movebuffer[1] = 0;
@@ -56,15 +62,18 @@ int play(const bool white, const int game_id) { // This is the main routine in t
 	while (true) {
 		system("clear");
 		print_board(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3], !white);
+		printf("%s\n", status_str[status]);
 
-		if (!my_turn) { // Block until other player makes move
+		if (status == 0) { // Block until other player makes move
 			wait(movebuffer, fifoname);
-			my_turn = true;
-			// At this point the input buffer should be cleared... to be implemented...
+			status = 1;
+			
+			CLEAR_STDIN();
+			
 			continue;
 		}
 
-		my_turn = input(movebuffer, fifoname, white);		
+		status = input(movebuffer, fifoname, white);
 	}
 
 	SHELL_BACK_TO_NORMAL();
@@ -73,7 +82,7 @@ int play(const bool white, const int game_id) { // This is the main routine in t
 }
 
 
-static bool input(char movebuffer[], const char fifoname[], const bool white) {
+static int input(char movebuffer[], const char fifoname[], const bool white) {
 	char* pi;
 	char* pj;
 	char* si;
@@ -105,7 +114,7 @@ static bool input(char movebuffer[], const char fifoname[], const bool white) {
 
 	if (c == '\n') {
 		if (selection_made) {
-			if (move_piece(*pi, *pj, *si, *sj) == 0) { // move_piece should return 0 on success and 1 on an illegal move (To be implemented)
+			if (move_piece(*pi, *pj, *si, *sj, white) == 0) { // move_piece should return 0 on success and -1 on an illegal move
 				fd = open(fifoname, O_WRONLY);
 				write(fd, movebuffer, 4);
 				close(fd);
@@ -114,7 +123,13 @@ static bool input(char movebuffer[], const char fifoname[], const bool white) {
 				*sj = -1;
 				selection_made = false;
 
-				return false;
+				return 0;
+			}
+			else { // Illegal move
+				selection_made = false;
+				*si = -1;
+				*sj = -1;
+				return 2;
 			}
 		}
 		else {
@@ -129,21 +144,20 @@ static bool input(char movebuffer[], const char fifoname[], const bool white) {
 		selection_made = false;
 	}
 
-	return true;
+	return 1;
 }
 
 static void wait(char movebuffer[], const char fifoname[]) {
 	int fd;
-	printf("%s\n", "Waiting for the other player to make a move...");
 	fd = open(fifoname, O_RDONLY); // Execution will block here, until the other player writes to the fifo
 	read(fd, movebuffer, 4);
 	close(fd);
-	move_piece(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3]);
+	move_piece_unsafe(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3]);
 }
 
 
 
-static void name_fifo(char buffer[], int pid) { // This function is very specific to what is done here... it assigns a filename for the FIFO in the format /tmp/fifo_<PID>
+static void name_fifo(char buffer[], int pid) { // This function is very specific to what is done here ... it assigns a filename for the FIFO in the format /tmp/fifo_<PID>
 	int i, len;
 	strcpy(buffer, "/tmp/fifo_");
 	char buf[10];

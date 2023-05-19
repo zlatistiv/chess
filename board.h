@@ -1,3 +1,7 @@
+#ifndef BOARD_H
+#define BOARD_H
+
+
 #define BOARD_SIZE 8
 
 // Background color constants
@@ -14,4 +18,8 @@
 
 void initialize_board();
 void print_board(const char, const char, const char, const char, const bool);
-int move_piece(const char, const char, const char, const char);
+int move_piece(const char, const char, const char, const char, const bool);
+void move_piece_unsafe(const char, const char, const char, const char);
+
+
+#endif

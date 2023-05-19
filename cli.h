@@ -1,3 +1,7 @@
+#ifndef CLI_H
+#define CLI_H
+
+
 int play(const bool, const int);
 
 /*tcgetattr gets the parameters of the current terminal
@@ -25,3 +29,13 @@ int play(const bool, const int);
 	tcsetattr(STDIN_FILENO, TCSANOW, &newt);\
 
 #define SHELL_BACK_TO_NORMAL() tcsetattr(STDIN_FILENO, TCSANOW, &oldt)
+
+
+// https://stackoverflow.com/questions/17318886/fflush-is-not-working-in-linux/23885008#23885008
+#define CLEAR_STDIN() \
+	int stdin_copy = dup(STDIN_FILENO); \
+	tcdrain(stdin_copy); \
+	tcflush(stdin_copy, TCIFLUSH); \
+	close(stdin_copy); \
+
+#endif

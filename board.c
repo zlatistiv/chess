@@ -120,52 +120,140 @@ void print_board(const char pi, const char pj, const char si, const char sj, con
 	}
 }
 
+static bool is_valid_move_rook(const char to_i, const char to_j, const char from_i, const char from_j) {
+	int index;
 
-int move_piece(const char ti, const char tj, const char fi, const char fj, const bool white) { // to" and "from" indeces (corresponfs to pi, pj, si, sj). i is the vertical index, j is the horizontal. Move validation will be implemented here (function should return a status code)
-	static int move_counter = 0;
+	if (to_i == from_i) {
+		if (to_j > from_j) {
+			for (index = from_j + 1; index < to_j; index++) {
+				if (cells[to_i][index] != &EMPTY) return false;
+			}
+		}
+		else if (to_j < from_j) {
+			for (index = to_j + 1; index < from_j; index++) {
+				if (cells[to_i][index] != &EMPTY) return false;
+			}
+		}
+		else return false;
+	}
+	else if (to_j == from_j) {
+		if (to_i > from_i) {
+			for (index = from_i + 1; index < to_i; index++) {
+				if (cells[index][to_j] != &EMPTY) return false;
+			}
+		}
+		else if (to_i < from_i) {
+			for (index = to_i + 1; index < from_i; index++) {
+				if (cells[index][to_j] != &EMPTY) return false;
+			}
+		}
+		else return false;
+	}
+	else return false;
 
-	if (cells[fi][fj] == &EMPTY) return -1;
+	return true;
+}
+
+static bool is_valid_move_bishop(const char to_i, const char to_j, const char from_i, const char from_j) {
+	int index;
+
+	if (abs(to_i - from_i) != abs(to_j - from_j)) return false;
+	else {
+		if (to_i > from_i) {
+			if (to_j > from_j) {
+				for (index = 1; index < to_i - from_i; index++) {
+					if (cells[from_i + index][from_j + index] != &EMPTY) return false;
+				}
+			}
+			else if (to_j < from_j) {
+				for (index = 1; index < to_i - from_i; index++) {
+					if (cells[from_i + index][from_j - index] != &EMPTY) return false;
+				}
+			}
+			else return false;
+		}
+		else if (to_i < from_i) {
+			if (to_j > from_j) {
+				for (index = 1; index < from_i - to_i; index++) {
+					if (cells[from_i - index][from_j + index] != &EMPTY) return false;
+				}
+			}
+			else if (to_j < from_j) {
+				for (index = 1; index < from_i - to_i; index++) {
+					if (cells[from_i - index][from_j - index] != &EMPTY) return false;
+				}
+			}
+			else return false;
+		}
+		else return false;
+	}
+
+	return true;
+}
+
+static bool is_valid_move(const char to_i, const char to_j, const char from_i, const char from_j, const bool white, const int move_counter) {
+	if (cells[from_i][from_j] == &EMPTY) return false;
 
 	if (white) {
-		if (cells[fi][fj] == &PAWN_B || cells[fi][fi] == &ROOK_B || cells[fi][fi] == &KNIGHT_B || cells[fi][fi] == &BISHOP_B || cells[fi][fi] == &QUEEN_B || cells[fi][fi] == &KING_B) return -1;
-		if (cells[ti][tj] == &PAWN_W || cells[fi][fi] == &ROOK_W || cells[fi][fi] == &KNIGHT_W || cells[fi][fi] == &BISHOP_W || cells[fi][fi] == &QUEEN_W || cells[fi][fi] == &KING_W) return -1;
+		if (cells[from_i][from_j] == &PAWN_B || cells[from_i][from_j] == &ROOK_B || cells[from_i][from_j] == &KNIGHT_B || cells[from_i][from_j] == &BISHOP_B || cells[from_i][from_j] == &QUEEN_B || cells[from_i][from_j] == &KING_B) return false;
+		if (cells[to_i][to_j] == &PAWN_W || cells[to_i][to_j] == &ROOK_W || cells[to_i][to_j] == &KNIGHT_W || cells[to_i][to_j] == &BISHOP_W || cells[to_i][to_j] == &QUEEN_W || cells[to_i][to_j] == &KING_W) return false;
 
-		if (cells[fi][fj] == &PAWN_W) {
-			
+		if (cells[from_i][from_j] == &PAWN_W) {
+			if (from_i >= to_i) return false;
+			else if (to_i - from_i == 1) {
+				if (from_j == to_j) {
+					if (cells[to_i][to_j] != &EMPTY) return false;
+				}
+				else if (abs(to_j - from_j) == 1) {
+					if (cells[to_i][to_j] == &EMPTY) return false;
+				}
+				else return false;
+			}
+			else if (move_counter == 0) {
+				if (to_i - from_i != 2 || from_j != to_j) return false;
+			}
+			else return false;
+
 		}
-		if (cells[fi][fj] == &ROOK_W) {
-			
+		else if (cells[from_i][from_j] == &ROOK_W) {
+			if (!is_valid_move_rook(to_i, to_j, from_i, from_j)) return false;
 		}
-		if (cells[fi][fj] == &KNIGHT_W) {
-			
+		else if (cells[from_i][from_j] == &KNIGHT_W) {
+			if (abs(from_i - to_i) + abs(from_j - to_j) != 3 || from_i == to_i || from_j == to_j) return false;
 		}
-		if (cells[fi][fj] == &BISHOP_W) {
-			
+		else if (cells[from_i][from_j] == &BISHOP_W) {
+			if (!is_valid_move_bishop(to_i, to_j, from_i, from_j)) return false;
 		}
-		if (cells[fi][fj] == &QUEEN_W) {
-			
+		else if (cells[from_i][from_j] == &QUEEN_W) {
+			if (!is_valid_move_rook(to_i, to_j, from_i, from_j) && !is_valid_move_bishop(to_i, to_j, from_i, from_j)) return false;
 		}
-		if (cells[fi][fj] == &KING_W) {
-			
+		else if (cells[from_i][from_j] == &KING_W) {
+			if (abs(from_i - to_i) > 1 || abs(from_j - to_j) > 1) return false;
 		}
 	}
 	else {
-		if (cells[fi][fj] == &PAWN_W || cells[fi][fi] == &ROOK_W || cells[fi][fi] == &KNIGHT_W || cells[fi][fi] == &BISHOP_W || cells[fi][fi] == &QUEEN_W || cells[fi][fi] == &KING_W) return -1;
-		if (cells[ti][tj] == &PAWN_B || cells[fi][fi] == &ROOK_B || cells[fi][fi] == &KNIGHT_B || cells[fi][fi] == &BISHOP_B || cells[fi][fi] == &QUEEN_B || cells[fi][fi] == &KING_B) return -1;
+		if (cells[from_i][from_j] == &PAWN_W || cells[from_i][from_j] == &ROOK_W || cells[from_i][from_j] == &KNIGHT_W || cells[from_i][from_j] == &BISHOP_W || cells[from_i][from_j] == &QUEEN_W || cells[from_i][from_j] == &KING_W) return false;
+		if (cells[to_i][to_j] == &PAWN_B || cells[to_i][to_j] == &ROOK_B || cells[to_i][to_j] == &KNIGHT_B || cells[to_i][to_j] == &BISHOP_B || cells[to_i][to_j] == &QUEEN_B || cells[to_i][to_j] == &KING_B) return false;
 	}
 
+	return true;
+}
+
+
+int move_piece(const char to_i, const char to_j, const char from_i, const char from_j, const bool white) { // to" and "from" indeces (corresponfs to pi, pj, si, sj). i is the vertical index, j is the horizontal. Move validation will be implemented here (function should return a status code)
+	static int move_counter = 0;
 	
+	if (!is_valid_move(to_i, to_j, from_i, from_j, white, move_counter)) return -1;
 
-
-	cells[ti][tj] = cells[fi][fj];
-	cells[fi][fj] = &EMPTY;
+	cells[to_i][to_j] = cells[from_i][from_j];
+	cells[from_i][from_j] = &EMPTY;
 
 	move_counter++;
 
 	return 0;
 }
 
-void move_piece_unsafe(const char ti, const char tj, const char fi, const char fj) { // This is used to move the other players pieces
-	cells[ti][tj] = cells[fi][fj];
-	cells[fi][fj] = &EMPTY;
+void move_piece_unsafe(const char to_i, const char to_j, const char from_i, const char from_j) { // This is used to move the other players pieces
+	cells[to_i][to_j] = cells[from_i][from_j];
+	cells[from_i][from_j] = &EMPTY;
 }

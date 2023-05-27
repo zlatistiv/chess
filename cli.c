@@ -23,9 +23,9 @@ static void wait(char movebuffer[], const char fifoname[]);
 static void name_fifo(char buffer[], int pid);
  
 static const char *status_str[] = {
-	"Waiting for the other player to make a move...",
-	"Your turn.", // My turn
-	"Bad move! Please try again."
+	"\n## Waiting for the other player... ##",
+	"\n## Your turn. ##", // My turn
+	"\n## Bad move! Please try again. ##"
 };
 
 

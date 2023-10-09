@@ -2,181 +2,149 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <ctype.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #include <termios.h> //termios, TCSANOW, ECHO, ICANON
 #include <unistd.h> //STDIN_FILENO
-// How to read input without pressing Enter (needed for this game):
-// https://stackoverflow.com/questions/1798511/how-to-avoid-pressing-enter-with-getchar-for-reading-a-single-character-only
+
+#include <pthread.h>
 
 #include "cli.h"
 #include "board.h"
 
+#define FIFONAMEMAX 16
 
-static int input(char movebuffer[], const char fifoname[], const bool white);
-
-static void wait(char movebuffer[], const char fifoname[]);
-
-static void name_fifo(char buffer[], int pid);
- 
 static const char *status_str[] = {
 	"\n## Waiting for the other player... ##",
-	"\n## Your turn. ##", // My turn
-	"\n## Bad move! Please try again. ##"
+	"\n## Your turn. ##",
+	"\n## Bad move! Please try again. ##",
+	"\n## Cannot move due to check condition. ##"
 };
 
+int clocks[2] = {600, 600};
+Color color;
+Status status;
+Move selection;
+bool selected;
 
-int play(const bool white, const int game_id) { // This is the main routine in this file
+static void update() {
+	system("clear");
+	printf("White: %d:%02d; Black: %d:%02d\n\n", clocks[WHITE] / 60, clocks[WHITE] % 60, clocks[BLACK] / 60, clocks[BLACK] % 60);
+	print_board(&selection, color, selected);
+	printf("%s\n", status_str[status]);
+
+}
+
+static void *update_clock(void *vargs) { // Periodically run to update the clock and re-display the screen
+	while (1) {
+		sleep(1);
+		update();
+
+		if (status == WAITING) clocks[!color]--;
+		else clocks[color]--;
+	}
+}
+
+static void name_fifo(char fifoname[], int game_id) {
+	int i;
+	for (i = 0; i < FIFONAMEMAX; i++) {
+		fifoname[i] = '0' + game_id % 10;
+		game_id /= 10;
+		if (game_id == 0) {
+			i++;
+			break;
+		}
+	}
+	fifoname[i] = '\0';
+}
+
+static void wait(const char fifoname[], Move *move) {
+	int fifo_fd;
+	fifo_fd = open(fifoname, O_RDONLY);
+	char buf[4];
+	read(fifo_fd, buf, sizeof(buf));
+	close(fifo_fd);
+	read_op_move(buf, !color);
+}
+
+int play(const bool is_white, const int game_id) {
 	SETUP_SHELL();
 
-	char fifoname[30];
-	char movebuffer[4];
-	int status = white; // 0 -> waiting for other player; 1 -> my move; 2 -> my move but my last move was illegal
-
-	movebuffer[0] = 0;
-	movebuffer[1] = 0;
-	movebuffer[2] = -1;
-	movebuffer[3] = -1;
-
-	initialize_board();
+	color = is_white;
+	status = color;
+	Pos marked = {0, 0};
+	Pos pointed = {0, 0};
+	selection.src = &marked;
+	selection.dst = &pointed;
+	char fifoname[FIFONAMEMAX];
+	int fifo_fd;
+	char c;
+	int increment;
+	selected = false;
+	increment = color * 2 - 1;
+	pthread_t clock_thread;
+	
 	name_fifo(fifoname, game_id);
 
-	int fd;
-	if (white) { 
-		if (mkfifo(fifoname, 0666) == -1) {
-			printf("%s\n", "Could not create FIFO!");
-			return -1;
+	if (color == WHITE) {
+		if (mkfifo(fifoname, 0600) == -1) {
+			fprintf(stderr, "%s\n", "Error creating named pipe!");
+			exit(1);
 		}
-		printf("Waiting for a guest to join, Game ID: %d\n", game_id);
-		fd = open(fifoname, O_RDONLY); // Execution will block here, until the other player opens the fifo pipe for writing
-		close(fd);
+		printf("Waiting for an oponent to join, Game ID: %d\n", game_id);
+		fifo_fd = open(fifoname, O_RDONLY); // Execution will block here, until the other player opens the pipe for writing
+		close(fifo_fd);
 	}
 	else {
-		fd = open(fifoname, O_WRONLY);
-		close(fd);
+		fifo_fd = open(fifoname, O_WRONLY); // Open the pipe to unblock the other players process
+		close(fifo_fd);
 	}
 
+	// Starting the game...
+	pthread_create(&clock_thread, NULL, update_clock, (void *)&clock_thread);
+	initialize_board();
+
 	while (true) {
-		system("clear");
-		print_board(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3], !white);
-		printf("%s\n", status_str[status]);
+		update();
 
-		if (status == 0) { // Block until other player makes move
-			wait(movebuffer, fifoname);
-			status = 1;
-			
+		if (status == WAITING) { // Block until other player makes move
+			wait(fifoname, &selection);
+			status = MY_TURN;
 			CLEAR_STDIN();
-			
-			continue;
 		}
+		else {
+			c = tolower(getchar());
+			if (c == 'w') pointed.i+=increment;
+			else if (c == 'a') pointed.j-=increment;
+			else if (c == 's') pointed.i-=increment;
+			else if (c == 'd') pointed.j+=increment;
 
-		status = input(movebuffer, fifoname, white);
+			if (selected) {
+				if (c == '\n') {
+					if ((status = move_piece(&selection, color)) == 0) {
+						update();
+						fifo_fd = open(fifoname, O_WRONLY);
+						char buf[4] = {selection.src->i, selection.src->j, selection.dst->i, selection.dst->j};
+						write(fifo_fd, buf, sizeof(buf));
+						close(fifo_fd);
+					}
+
+					selected = false;
+				}
+				else if (c == 'c') {
+					selected = false;
+				}
+			}
+			else if (c == '\n') {
+				marked.i = pointed.i;
+				marked.j = pointed.j;
+				selected = true;
+			}
+		}
 	}
 
 	SHELL_BACK_TO_NORMAL();
-
 	return 0;
 }
-
-
-static int input(char movebuffer[], const char fifoname[], const bool white) {
-	char* pi;
-	char* pj;
-	char* si;
-	char* sj;
-	pi = &movebuffer[0];
-	pj = &movebuffer[1];
-	si = &movebuffer[2];
-	sj = &movebuffer[3];
-	char c;
-	int fd;
-	static bool selection_made = false;
-
-	c = getchar();
-
-	// The if statements can certaintly be optimized...
-
-	if (white) {
-		if ((c == 'w' || c == 'W') && *pi < BOARD_SIZE - 1) (*pi)++;
-		else if ((c == 'a' || c == 'A') && *pj > 0) (*pj)--;
-		else if ((c == 's' || c == 'S') && *pi > 0) (*pi)--;
-		else if ((c == 'd' || c == 'D') && *pj < BOARD_SIZE - 1) (*pj)++;
-	}
-	else {
-		if ((c == 'w' || c == 'W') && *pi > 0) (*pi)--;
-		else if ((c == 'a' || c == 'A') && *pj < BOARD_SIZE - 1) (*pj)++;
-		else if ((c == 's' || c == 'S') && *pi < BOARD_SIZE - 1) (*pi)++;
-		else if ((c == 'd' || c == 'D') && *pj > 0) (*pj)--;
-	}
-
-	if (c == '\n') {
-		if (selection_made) {
-			if (move_piece(*pi, *pj, *si, *sj, white) == 0) { // move_piece should return 0 on success and -1 on an illegal move
-				fd = open(fifoname, O_WRONLY);
-				write(fd, movebuffer, 4);
-				close(fd);
-
-				*si = -1;
-				*sj = -1;
-				selection_made = false;
-
-				return 0;
-			}
-			else { // Illegal move
-				selection_made = false;
-				*si = -1;
-				*sj = -1;
-				return 2;
-			}
-		}
-		else {
-			*si = *pi;
-			*sj = *pj;
-			selection_made = true;
-		}
-	}
-	else if ((c == 'c' || c == 'C') && selection_made) { // Cancel selection
-		*si = -1;
-		*sj = -1;
-		selection_made = false;
-	}
-
-	return 1;
-}
-
-static void wait(char movebuffer[], const char fifoname[]) {
-	int fd;
-	fd = open(fifoname, O_RDONLY); // Execution will block here, until the other player writes to the fifo
-	read(fd, movebuffer, 4);
-	close(fd);
-	move_piece_unsafe(movebuffer[0], movebuffer[1], movebuffer[2], movebuffer[3]);
-}
-
-
-
-static void name_fifo(char buffer[], int pid) { // This function is very specific to what is done here ... it assigns a filename for the FIFO in the format /tmp/fifo_<PID>
-	int i, len;
-	strcpy(buffer, "/tmp/fifo_");
-	char buf[10];
-	
-	i = 0;
-
-	do {
-		buf[i++] = pid % 10 + '0';
-
-	} while ((pid /= 10) > 0);
-
-	buf[i] = '\0';
-
-	len = i;
-
-	for (i = 0; buf[i] != '\0'; i++) {
-		buffer[i + 10] = buf[len - i - 1];
-	}
-
-	buffer[10 + len] = '\0';
-}
-

@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include "cli.h"
 
-
 void help_output() {
 	printf("Usage: chess [OPTION]... [GAME ID]...\n");
 	printf("Host a game of chess or join an existing one.\n");
@@ -17,8 +16,7 @@ void help_output() {
 	printf("Move the cursor over the desired location and press Enter again to move the piece.\n");
 }
 
-
-int main(const int argc, const char** argv) {
+int main(int argc, char* argv[]) {
 	int status;
 
 	if (argc == 1) {

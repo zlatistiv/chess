@@ -1,424 +1,241 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
-#include <time.h>
+#include <string.h>
 
 #include "board.h"
+#include "move_validation.h"
 
 
-static char** cells[BOARD_SIZE][BOARD_SIZE];
+// This is the base string from which begin all the pieces; This is the black king
+static const char *BASE = "\xe2\x99\x94";
 
-static char* PAWN_W = "\xe2\x99\x9f";
-static char* ROOK_W = "\xe2\x99\x9c";
-static char* KNIGHT_W = "\xe2\x99\x9e";
-static char* BISHOP_W = "\xe2\x99\x9d";
-static char* QUEEN_W = "\xe2\x99\x9b";
-static char* KING_W = "\xe2\x99\x9a";
+// Here supplying the Player Color as index will provide you with the correct color scheme to use
+static const char *POINTER_COLOR[] = {
+	"\033[32m\033[40m",
+	"\033[32m\033[44m"
+};
+static const char *SELECTION_COLOR[] = {
+	"\033[35m\033[40m",
+	"\033[35m\033[44m"
+};
+static const char *OP_POINTER_COLOR[] = {
+	"\033[33m\033[40m",
+	"\033[33m\033[44m"
+};
+static const char *OP_SELECTION_COLOR[] = {
+	"\033[31m\033[40m",
+	"\033[31m\033[44m"
+};
+static const char *BACKGROUND_COLOR[] = {
+	"\033[37m\033[40m",
+	"\033[37m\033[44m"
+};
 
-// Black pieces
-static char* PAWN_B = "\xe2\x99\x99";
-static char* ROOK_B = "\xe2\x99\x96";
-static char* KNIGHT_B = "\xe2\x99\x98";
-static char* BISHOP_B = "\xe2\x99\x97";
-static char* QUEEN_B = "\xe2\x99\x95";
-static char* KING_B = "\xe2\x99\x94";
 
-static char* EMPTY = " ";
+bool (*is_valid_move[13]) (const Move *, const Move *) = {
+	is_valid_move_king_black,
+	is_valid_move_queen,
+	is_valid_move_rook,
+	is_valid_move_bishop,
+	is_valid_move_knight,
+	is_valid_move_pawn_black,
+	is_valid_move_king_black,
+	is_valid_move_queen,
+	is_valid_move_rook,
+	is_valid_move_bishop,
+	is_valid_move_knight,
+	is_valid_move_pawn_white,
+	is_valid_move_empty,
+};
 
 
-static bool is_valid_move_pawn_white(const char to_i, const char to_j, const char from_i, const char from_j);
-static bool is_valid_move_pawn_black(const char to_i, const char to_j, const char from_i, const char from_j);
-static bool is_valid_move_rook(const char to_i, const char to_j, const char from_i, const char from_j);
-static bool is_valid_move_knight(const char to_i, const char to_j, const char from_i, const char from_j);
-static bool is_valid_move_bishop(const char to_i, const char to_j, const char from_i, const char from_j);
-static bool is_valid_move_queen(const char to_i, const char to_j, const char from_i, const char from_j);
-static bool is_valid_move_king(const char to_i, const char to_j, const char from_i, const char from_j);
-static bool is_valid_move(const char to_i, const char to_j, const char from_i, const char from_j, const bool white);
-static bool checked(const bool white);
+Piece board[BOARD_SIZE][BOARD_SIZE];
 
+Pos p1 = {0, 0};
+Pos p2 = {0, 0};
+Move op_move = {&p1, &p2};
+
+int move_counter;
+
+Piece pieceat(const Pos *p) {
+	return board[p->i][p->j];
+}
+
+Piece pieceatindex(const char i, const char j) {
+	return board[i][j];
+}
+
+int get_color(const Piece piece) {
+	if (piece >= KING_B && piece <= PAWN_B) return BLACK;
+	if (piece >= KING_W && piece <= PAWN_W) return WHITE;
+	return -1; // This is for when the "Piece" is an empty square
+}
+
+void read_op_move(char buf[4], const Color color) {
+	op_move.src->i = buf[0];
+	op_move.src->j = buf[1];
+	op_move.dst->i = buf[2];
+	op_move.dst->j = buf[3];
+	move_piece(&op_move, color);
+}
 
 
 void initialize_board() {
 	int i, j;
-
+	
 	for (j = 0; j < BOARD_SIZE; j++) {
-		cells[1][j] = &PAWN_W;
-		cells[6][j] = &PAWN_B;
+		board[1][j] =  PAWN_W;
+		board[6][j] =  PAWN_B;
 	}
+	
+	board[0][0] = ROOK_W;
+	board[0][1] = KNIGHT_W;
+	board[0][2] = BISHOP_W;
+	board[0][3] = QUEEN_W;
+	board[0][4] = KING_W;
+	board[0][5] = BISHOP_W;
+	board[0][6] = KNIGHT_W;
+	board[0][7] = ROOK_W;
 
-	cells[0][0] = &ROOK_W;
-	cells[0][1] = &KNIGHT_W;
-	cells[0][1] = &KNIGHT_W;
-	cells[0][2] = &BISHOP_W;
-	cells[0][3] = &QUEEN_W;
-	cells[0][4] = &KING_W;
-	cells[0][5] = &BISHOP_W;
-	cells[0][6] = &KNIGHT_W;
-	cells[0][7] = &ROOK_W;
-
-	cells[7][0] = &ROOK_B;
-	cells[7][1] = &KNIGHT_B;
-	cells[7][2] = &BISHOP_B;
-	cells[7][3] = &QUEEN_B;
-	cells[7][4] = &KING_B;
-	cells[7][5] = &BISHOP_B;
-	cells[7][6] = &KNIGHT_B;
-	cells[7][7] = &ROOK_B;
+	board[7][0] = ROOK_B;
+	board[7][1] = KNIGHT_B;
+	board[7][2] = BISHOP_B;
+	board[7][3] = QUEEN_B;
+	board[7][4] = KING_B;
+	board[7][5] = BISHOP_B;
+	board[7][6] = KNIGHT_B;
+	board[7][7] = ROOK_B;
 
 	for (i = 2; i < BOARD_SIZE - 2; i++) {
 		for (j = 0; j < BOARD_SIZE; j++) {
-			cells[i][j] = &EMPTY;
+			board[i][j] =  EMPTY;
 		}
 	}
+
+	move_counter = 0;
 }
 
-void print_board_pieces(const char i, const char j, const char pi, const char pj, const char si, const char sj) {
-	if (i == si && j == sj) { // selected case
-		if ((i + j) % 2 == 0) {
-			printf("%s[", SELECTED_BLACK);
-			printf("%s%s", BLACK, *cells[i][j]);
-			printf("%s]", SELECTED_BLACK);
-		}
-		else {
-			printf("%s[", SELECTED_WHITE);
-			printf("%s%s", WHITE, *cells[i][j]);
-			printf("%s]", SELECTED_WHITE);
-		}
-	}
-	else if (i == pi && j == pj) { // pointed case
-		if ((i + j) % 2 == 0) {
-			printf("%s[", POINTED_BLACK);
-			printf("%s%s", BLACK, *cells[i][j]);
-			printf("%s]", POINTED_BLACK);
-		}
-		else {
-			printf("%s[", POINTED_WHITE);
-			printf("%s%s", WHITE, *cells[i][j]);
-			printf("%s]", POINTED_WHITE);
-		}
-	}
-	else { // default case
-		if ((i + j) % 2 == 0) printf("%s %s ", BLACK, *cells[i][j]);
-		else printf("%s %s ", WHITE, *cells[i][j]);
-	}
-}
-
-
-void print_board(const char pi, const char pj, const char si, const char sj, const bool flipped) { // pointed and selected indeces
+void print_board(const Move *move, const Color color, const bool selected) {
+	Pos ind; // indeces
 	int i, j;
+	char buf[4];
+	Color square_color;
 
-	if (!flipped) {
-		for (i = BOARD_SIZE - 1; i >= 0; i--) {
-			printf("%d|", i + 1);
+	for (i = 0; i < BOARD_SIZE; i++) {
+		if (color == WHITE) ind.i = BOARD_SIZE - i - 1;
+		else ind.i = i;
+		printf("%d|", ind.i + 1);
+		
+		for (j = 0; j < BOARD_SIZE; j++) {
+			if (color == BLACK) ind.j = BOARD_SIZE - j - 1;
+			else ind.j = j;
 			
-			for (j = 0; j < BOARD_SIZE; j++) {
-				print_board_pieces(i, j, pi, pj, si, sj);
+			if (board[ind.i][ind.j] != EMPTY) {
+				strcpy(buf, BASE);
+				buf[2] += board[ind.i][ind.j];
 			}
-			printf("%s\n", DEFAULT);
+			else strcpy(buf, " ");
+
+			square_color = (ind.i + ind.j) % 2 != 0;
+
+			if (selected && ind.i == move->src->i && ind.j == move->src->j) {
+				printf("%s[", SELECTION_COLOR[square_color]);
+				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
+				printf("%s]", SELECTION_COLOR[square_color]);
+			}
+			else if (ind.i == move->dst->i && ind.j == move->dst->j) {
+				printf("%s[", POINTER_COLOR[square_color]);
+				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
+				printf("%s]", POINTER_COLOR[square_color]);
+			}
+			else if (move_counter > color && ind.i == op_move.src->i && ind.j == op_move.src->j) {
+				printf("%s[", OP_SELECTION_COLOR[square_color]);
+				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
+				printf("%s]", OP_SELECTION_COLOR[square_color]);
+			}
+			else if (move_counter > color && ind.i == op_move.dst->i && ind.j == op_move.dst->j) {
+				printf("%s[", OP_POINTER_COLOR[square_color]);
+				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
+				printf("%s]", OP_POINTER_COLOR[square_color]);
+			}
+			else printf("%s %s ", BACKGROUND_COLOR[square_color], buf);
 		}
+		printf("%s\n", BACKGROUND_DEFAULT);
+	}
+
+	if (color == WHITE) {
 		printf("%s\n", "   ______________________");
 		printf("%s\n", "   a  b  c  d  e  f  g  h");
 	}
 	else {
-		for (i = 0; i < BOARD_SIZE; i++) {
-			printf("%d|", i + 1);
-		
-			for (j = BOARD_SIZE - 1; j >= 0; j--) {
-				print_board_pieces(i, j, pi, pj, si, sj);
-			}
-			printf("%s\n", DEFAULT);
-		}
 		printf("%s\n", "   ______________________");
 		printf("%s\n", "   h  g  f  e  d  c  b  a");
 	}
 }
 
 
-int move_piece(const char to_i, const char to_j, const char from_i, const char from_j, const bool white) { // to" and "from" indeces (corresponfs to pi, pj, si, sj). i is the vertical index, j is the horizontal. Move validation will be implemented here (function should return a status code)
-	static int move_counter = 0;
-	static int king_move_counter = 0;
-	char **tmp;
+static bool threatened(Pos* pos, const Color color) { // Checks whether any piece with color "color" threatens the position "pos"
+	int i, j;
+	Piece p;
+	Pos src;
+	Move mv = {&src, pos};
 
-	if (!is_valid_move(to_i, to_j, from_i, from_j, white)) return -1;
-	
-	if (checked(white)) {
-		tmp = cells[to_i][to_j];
-		cells[to_i][to_j] = cells[from_i][from_j];
-		cells[from_i][from_j] = &EMPTY;
-
-		if (checked(white)) {
-			cells[from_i][from_j] = cells[to_i][to_j];
-			cells[to_i][to_j] = tmp;
-			return -1;
-		}
-		else {
-			move_counter++;
-			return 0;
-		}
-	}
-	
-	tmp = cells[to_i][to_j];
-	cells[to_i][to_j] = cells[from_i][from_j];
-	cells[from_i][from_j] = &EMPTY;
-
-	if (checked(white)) {
-		cells[from_i][from_j] = cells[to_i][to_j];
-		cells[to_i][to_j] = tmp;
-		return -1;
-	}
-
-	move_counter++;
-
-	return 0;
-}
-
-void move_piece_unsafe(const char to_i, const char to_j, const char from_i, const char from_j) { // This is used to move the other players pieces
-	cells[to_i][to_j] = cells[from_i][from_j];
-	cells[from_i][from_j] = &EMPTY;
-}
-
-
-// Below code is for move validation
-
-static bool is_valid_move_pawn_white(const char to_i, const char to_j, const char from_i, const char from_j) {
-	if (from_i >= to_i) return false;
-	else if (to_i - from_i == 1) {
-		if (from_j == to_j) {
-			if (cells[to_i][to_j] != &EMPTY) return false;
-		}
-		else if (abs(to_j - from_j) == 1) {
-			if (cells[to_i][to_j] == &EMPTY) return false;
-		}
-		else return false;
-	}
-	else if (from_i == 1) {
-		if (to_i - from_i != 2 || from_j != to_j) return false;
-	}
-	else return false;
-
-	return true;
-}
-
-static bool is_valid_move_pawn_black(const char to_i, const char to_j, const char from_i, const char from_j) {
-	if (to_i >= from_i) return false;
-	else if (from_i - to_i == 1) {
-		if (from_j == to_j) {
-			if (cells[to_i][to_j] != &EMPTY) return false;
-		}
-		else if (abs(to_j - from_j) == 1) {
-			if (cells[to_i][to_j] == &EMPTY) return false;
-		}
-		else return false;
-	}
-	else if (from_i == 6) {
-		if (from_i - to_i != 2 || from_j != to_j) return false;
-	}
-	else return false;
-
-	return true;
-}
-
-static bool is_valid_move_rook(const char to_i, const char to_j, const char from_i, const char from_j) {
-	int index;
-
-	if (to_i == from_i) {
-		if (to_j > from_j) {
-			for (index = from_j + 1; index < to_j; index++) {
-				if (cells[to_i][index] != &EMPTY) return false;
-			}
-		}
-		else if (to_j < from_j) {
-			for (index = to_j + 1; index < from_j; index++) {
-				if (cells[to_i][index] != &EMPTY) return false;
-			}
-		}
-		else return false;
-	}
-	else if (to_j == from_j) {
-		if (to_i > from_i) {
-			for (index = from_i + 1; index < to_i; index++) {
-				if (cells[index][to_j] != &EMPTY) return false;
-			}
-		}
-		else if (to_i < from_i) {
-			for (index = to_i + 1; index < from_i; index++) {
-				if (cells[index][to_j] != &EMPTY) return false;
-			}
-		}
-		else return false;
-	}
-	else return false;
-
-	return true;
-}
-
-static bool is_valid_move_knight(const char to_i, const char to_j, const char from_i, const char from_j) {
-	return abs(from_i - to_i) + abs(from_j - to_j) == 3 && from_i != to_i && from_j != to_j;
-}
-
-static bool is_valid_move_bishop(const char to_i, const char to_j, const char from_i, const char from_j) {
-	int index;
-
-	if (abs(to_i - from_i) != abs(to_j - from_j)) return false;
-	else {
-		if (to_i > from_i) {
-			if (to_j > from_j) {
-				for (index = 1; index < to_i - from_i; index++) {
-					if (cells[from_i + index][from_j + index] != &EMPTY) return false;
-				}
-			}
-			else if (to_j < from_j) {
-				for (index = 1; index < to_i - from_i; index++) {
-					if (cells[from_i + index][from_j - index] != &EMPTY) return false;
-				}
-			}
-			else return false;
-		}
-		else if (to_i < from_i) {
-			if (to_j > from_j) {
-				for (index = 1; index < from_i - to_i; index++) {
-					if (cells[from_i - index][from_j + index] != &EMPTY) return false;
-				}
-			}
-			else if (to_j < from_j) {
-				for (index = 1; index < from_i - to_i; index++) {
-					if (cells[from_i - index][from_j - index] != &EMPTY) return false;
-				}
-			}
-			else return false;
-		}
-		else return false;
-	}
-
-	return true;
-}
-
-static bool is_valid_move_queen(const char to_i, const char to_j, const char from_i, const char from_j) {
-	return is_valid_move_rook(to_i, to_j, from_i, from_j) || is_valid_move_bishop(to_i, to_j, from_i, from_j);
-}
-
-static bool is_valid_move_king(const char to_i, const char to_j, const char from_i, const char from_j) {
-	return abs(from_i - to_i) <= 1 && abs(from_j - to_j) <= 1;
-}
-
-static bool is_valid_move(const char to_i, const char to_j, const char from_i, const char from_j, const bool white) {
-	if (cells[from_i][from_j] == &EMPTY) return false;
-
-	if (white) {
-		if (cells[from_i][from_j] == &PAWN_B || cells[from_i][from_j] == &ROOK_B || cells[from_i][from_j] == &KNIGHT_B || cells[from_i][from_j] == &BISHOP_B || cells[from_i][from_j] == &QUEEN_B || cells[from_i][from_j] == &KING_B) return false;
-		if (cells[to_i][to_j] == &PAWN_W || cells[to_i][to_j] == &ROOK_W || cells[to_i][to_j] == &KNIGHT_W || cells[to_i][to_j] == &BISHOP_W || cells[to_i][to_j] == &QUEEN_W || cells[to_i][to_j] == &KING_W) return false;
-
-		if (cells[from_i][from_j] == &PAWN_W) {
-			if (!is_valid_move_pawn_white(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &ROOK_W) {
-			if (!is_valid_move_rook(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &KNIGHT_W) {
-			if (!is_valid_move_knight(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &BISHOP_W) {
-			if (!is_valid_move_bishop(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &QUEEN_W) {
-			if (!is_valid_move_queen(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &KING_W) {
-			if (!is_valid_move_king(to_i, to_j, from_i, from_j)) return false;
-		}
-	}
-	else {
-		if (cells[from_i][from_j] == &PAWN_W || cells[from_i][from_j] == &ROOK_W || cells[from_i][from_j] == &KNIGHT_W || cells[from_i][from_j] == &BISHOP_W || cells[from_i][from_j] == &QUEEN_W || cells[from_i][from_j] == &KING_W) return false;
-		if (cells[to_i][to_j] == &PAWN_B || cells[to_i][to_j] == &ROOK_B || cells[to_i][to_j] == &KNIGHT_B || cells[to_i][to_j] == &BISHOP_B || cells[to_i][to_j] == &QUEEN_B || cells[to_i][to_j] == &KING_B) return false;
-
-		if (cells[from_i][from_j] == &PAWN_B) {
-			if (!is_valid_move_pawn_black(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &ROOK_B) {
-			if (!is_valid_move_rook(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &KNIGHT_B) {
-			if (!is_valid_move_knight(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &BISHOP_B) {
-			if (!is_valid_move_bishop(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &QUEEN_B) {
-			if (!is_valid_move_queen(to_i, to_j, from_i, from_j)) return false;
-		}
-		else if (cells[from_i][from_j] == &KING_B) {
-			if (!is_valid_move_king(to_i, to_j, from_i, from_j)) return false;
-		}
-	}
-
-	return true;
-}
-
-static bool checked(const bool white) {
-	int king_i, king_j, i, j;
-
-	if (white) {
-		for (king_i = 0; king_i < BOARD_SIZE; king_i++) {
-			for (king_j = 0; king_j < BOARD_SIZE; king_j++) {
-				if (cells[king_i][king_j] == &KING_W) goto found_king_white;
-			}
-		}
-		found_king_white:
-
-		for (i = 0; i < BOARD_SIZE; i++) {
-			for (j = 0; j < BOARD_SIZE; j++) {
-				if (cells[i][j] == &PAWN_B) {
-					if (is_valid_move_pawn_black(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &ROOK_B) {
-					if (is_valid_move_rook(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &KNIGHT_B) {
-					if (is_valid_move_knight(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &BISHOP_B) {
-					if (is_valid_move_bishop(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &QUEEN_B) {
-					if (is_valid_move_queen(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &KING_B) {
-					if (is_valid_move_king(king_i, king_j, i, j)) return true;
-				}
-			}
-		}
-	}
-	else {
-		for (king_i = 0; king_i < BOARD_SIZE; king_i++) {
-			for (king_j = 0; king_j < BOARD_SIZE; king_j++) {
-				if (cells[king_i][king_j] == &KING_B) goto found_king_black;
-			}
-		}
-		found_king_black:
-
-		for (i = 0; i < BOARD_SIZE; i++) {
-			for (j = 0; j < BOARD_SIZE; j++) {
-				if (cells[i][j] == &PAWN_W) {
-					if (is_valid_move_pawn_white(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &ROOK_W) {
-					if (is_valid_move_rook(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &KNIGHT_W) {
-					if (is_valid_move_knight(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &BISHOP_W) {
-					if (is_valid_move_bishop(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &QUEEN_W) {
-					if (is_valid_move_queen(king_i, king_j, i, j)) return true;
-				}
-				else if (cells[i][j] == &KING_W) {
-					if (is_valid_move_king(king_i, king_j, i, j)) return true;
-				}
+	for (i = 0; i < BOARD_SIZE; i++) {
+		for (j = 0; j < BOARD_SIZE; j++) {
+			p = pieceatindex(i, j);
+			src.i = i;
+			src.j = j;
+			if (get_color(p) == color) {
+				if (is_valid_move[p](&mv, &op_move)) return true;
 			}
 		}
 	}
 
 	return false;
+}
+
+
+static bool checked(const Color color) { // Checks whether the player with color "color" is checked
+	int i, j;
+	Pos pos;
+
+	for (i = 0; i < BOARD_SIZE; i++) {
+		for (j = 0; j < BOARD_SIZE; j++) {
+			pos.i = i;
+			pos.j = j;
+			if ((color == WHITE && pieceat(&pos) == KING_W) || (color == BLACK && pieceat(&pos) == KING_B)) {
+				return threatened(&pos, !color);
+			}
+		}
+	}
+
+	return false;
+}
+
+
+Status move_piece(const Move *move, const Color color) {
+	Piece taker = board[move->src->i][move->src->j];
+	Piece taken = board[move->dst->i][move->dst->j];
+
+	Pos p1, p2;
+	p1.i = p1.j = 0;
+	p2.i = p2.j = 0;
+	Move op_move;
+	op_move.src = &p1;
+	op_move.dst = &p2;
+
+	if (get_color(taker) != color || get_color(taken) == color) return BAD_MOVE;
+	if (!is_valid_move[taker](move, &op_move)) return BAD_MOVE;
+	
+	board[move->dst->i][move->dst->j] = taker;
+	board[move->src->i][move->src->j] = EMPTY;
+	
+	if (checked(color)) {
+		board[move->src->i][move->src->j] = taker;
+		board[move->dst->i][move->dst->j] = taken;
+		return CHECKED;
+	}
+	
+	move_counter++;
+	return 0;
 }

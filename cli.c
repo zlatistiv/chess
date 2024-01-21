@@ -14,7 +14,8 @@
 #include "cli.h"
 #include "board.h"
 
-#define FIFONAMEMAX 16
+#define BASEDIR "/tmp/chess/"
+#define FIFONAME "fifo"
 
 static const char *status_str[] = {
 	"\n## Waiting for the other player... ##",
@@ -47,19 +48,6 @@ static void *update_clock(void *vargs) { // Periodically run to update the clock
 	}
 }
 
-static void name_fifo(char fifoname[], int game_id) {
-	int i;
-	for (i = 0; i < FIFONAMEMAX; i++) {
-		fifoname[i] = '0' + game_id % 10;
-		game_id /= 10;
-		if (game_id == 0) {
-			i++;
-			break;
-		}
-	}
-	fifoname[i] = '\0';
-}
-
 static void wait(const char fifoname[], Move *move) {
 	int fifo_fd;
 	fifo_fd = open(fifoname, O_RDONLY);
@@ -78,7 +66,8 @@ int play(const bool is_white, const int game_id) {
 	Pos pointed = {0, 0};
 	selection.src = &marked;
 	selection.dst = &pointed;
-	char fifoname[FIFONAMEMAX];
+	char *dirname;
+	char *fifoname;
 	int fifo_fd;
 	char c;
 	int increment;
@@ -86,19 +75,47 @@ int play(const bool is_white, const int game_id) {
 	increment = color * 2 - 1;
 	pthread_t clock_thread;
 	
-	name_fifo(fifoname, game_id);
+	// Name the fifo and the path to it
+	int i, j;
+	int n = 10; // This is the max amount of digits that will be taken into account from the value of "game_id". If it has less than that they will be filled with zeroes
+	int gid = game_id;
+
+	dirname = malloc(strlen(BASEDIR) + n + 2);
+	strcpy(dirname, BASEDIR);
+	i = strlen(BASEDIR);
+	
+	for (j = 0; j < 10; j++) {
+		*(dirname + i + j) = '0' + gid % 10;
+		gid /= 10;
+	}
+	dirname[i + j] = '/';
+	dirname[i + j + 1] = '\0';
+
+	fifoname = malloc(strlen(dirname) + strlen(FIFONAME));
+	strcpy(fifoname, dirname);
+	strcpy(fifoname + strlen(dirname), FIFONAME);
 
 	if (color == WHITE) {
-		if (mkfifo(fifoname, 0600) == -1) {
+		mkdir(BASEDIR, 0777 | S_ISVTX); // World writable as well as sticky bit.
+		mkdir(dirname, 0755);
+		chdir(dirname);
+		umask(0000);
+		if (mkfifo(FIFONAME, 0666) == -1) {
 			fprintf(stderr, "%s\n", "Error creating named pipe!");
 			exit(1);
 		}
 		printf("Waiting for an oponent to join, Game ID: %d\n", game_id);
-		fifo_fd = open(fifoname, O_RDONLY); // Execution will block here, until the other player opens the pipe for writing
+		fifo_fd = open(FIFONAME, O_RDONLY); // Execution will block here, until the other player opens the pipe for writing
+
 		close(fifo_fd);
 	}
 	else {
-		fifo_fd = open(fifoname, O_WRONLY); // Open the pipe to unblock the other players process
+		chdir(dirname);
+		fifo_fd = open(FIFONAME, O_WRONLY); // Open the pipe to unblock the other players process
+		if (fifo_fd == -1) {
+			fprintf(stderr, "Invalid game ID!\n");
+			exit(1);
+		}
 		close(fifo_fd);
 	}
 
@@ -110,22 +127,32 @@ int play(const bool is_white, const int game_id) {
 		update();
 
 		if (status == WAITING) { // Block until other player makes move
-			wait(fifoname, &selection);
+			wait(FIFONAME, &selection);
 			status = MY_TURN;
 			CLEAR_STDIN();
 		}
 		else {
 			c = tolower(getchar());
-			if (c == 'w') pointed.i+=increment;
-			else if (c == 'a') pointed.j-=increment;
-			else if (c == 's') pointed.i-=increment;
-			else if (c == 'd') pointed.j+=increment;
+			switch (c) {
+				case 'w':
+					pointed.i += increment;
+					break;
+				case 'a':
+					pointed.j -= increment;
+					break;
+				case 's':
+					pointed.i -= increment;
+					break;
+				case 'd':
+					pointed.j += increment;
+					break;
+			}
 
 			if (selected) {
 				if (c == '\n') {
 					if ((status = move_piece(&selection, color)) == 0) {
 						update();
-						fifo_fd = open(fifoname, O_WRONLY);
+						fifo_fd = open(FIFONAME, O_WRONLY);
 						char buf[4] = {selection.src->i, selection.src->j, selection.dst->i, selection.dst->j};
 						write(fifo_fd, buf, sizeof(buf));
 						close(fifo_fd);

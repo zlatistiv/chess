@@ -2,7 +2,7 @@
 #define CLI_H
 
 
-int play(const bool, const int);
+int play(const bool, const char *, const char *);
 
 // How to read input without pressing Enter (needed for this game):
 // https://stackoverflow.com/questions/1798511/how-to-avoid-pressing-enter-with-getchar-for-reading-a-single-character-only

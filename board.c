@@ -61,7 +61,7 @@ Piece pieceat(const Pos *p) {
 	return board[p->i][p->j];
 }
 
-Piece pieceatindex(const char i, const char j) {
+Piece pieceatindex(const int i, const int j) {
 	return board[i][j];
 }
 

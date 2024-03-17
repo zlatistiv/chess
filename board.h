@@ -57,7 +57,7 @@ Status move_piece(const Move *, const Color);
 
 Piece pieceat(const Pos *);
 
-Piece pieceatindex(const char i, const char j);
+Piece pieceatindex(const int i, const int j);
 
 void read_op_move(char buf[4], const Color color);
 

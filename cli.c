@@ -5,6 +5,10 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 #include <termios.h> //termios, TCSANOW, ECHO, ICANON
 #include <unistd.h> //STDIN_FILENO
@@ -14,8 +18,7 @@
 #include "cli.h"
 #include "board.h"
 
-#define BASEDIR "/tmp/chess/"
-#define FIFONAME "fifo"
+#define BSIZE 4
 
 static const char *status_str[] = {
 	"\n## Waiting for the other player... ##",
@@ -46,18 +49,16 @@ static void *update_clock(void *vargs) { // Periodically run to update the clock
 		if (status == WAITING) clocks[!color]--;
 		else clocks[color]--;
 	}
+	return NULL;
 }
 
-static void wait(const char fifoname[], Move *move) {
-	int fifo_fd;
-	fifo_fd = open(fifoname, O_RDONLY);
-	char buf[4];
-	read(fifo_fd, buf, sizeof(buf));
-	close(fifo_fd);
+static void wait(const int cfd) {
+	char buf[BSIZE];
+	read(cfd, buf, sizeof(buf));
 	read_op_move(buf, !color);
 }
 
-int play(const bool is_white, const int game_id) {
+int play(const bool is_white, const char *hostname, const char *port) {
 	SETUP_SHELL();
 
 	color = is_white;
@@ -66,68 +67,81 @@ int play(const bool is_white, const int game_id) {
 	Pos pointed = {0, 0};
 	selection.src = &marked;
 	selection.dst = &pointed;
-	char *dirname;
-	char *fifoname;
-	int fifo_fd;
 	char c;
 	int increment;
 	selected = false;
 	increment = color * 2 - 1;
 	pthread_t clock_thread;
-	
-	// Name the fifo and the path to it
-	int i, j;
-	int n = 10; // This is the max amount of digits that will be taken into account from the value of "game_id". If it has less than that they will be filled with zeroes
-	int gid = game_id;
 
-	dirname = malloc(strlen(BASEDIR) + n + 2);
-	strcpy(dirname, BASEDIR);
-	i = strlen(BASEDIR);
+	// Name resolution as shown in getaddrinfo(3)
+	struct addrinfo hints;
+	struct addrinfo *result, *rp;
+	int sfd, cfd, s;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_protocol = 0;
+	hints.ai_canonname = NULL;
+	hints.ai_next = NULL;
 	
-	for (j = 0; j < 10; j++) {
-		*(dirname + i + j) = '0' + gid % 10;
-		gid /= 10;
+	s = getaddrinfo(hostname, port, &hints, &result);
+	if (s != 0) {
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
+		exit(EXIT_FAILURE);
 	}
-	dirname[i + j] = '/';
-	dirname[i + j + 1] = '\0';
-
-	fifoname = malloc(strlen(dirname) + strlen(FIFONAME));
-	strcpy(fifoname, dirname);
-	strcpy(fifoname + strlen(dirname), FIFONAME);
 
 	if (color == WHITE) {
-		mkdir(BASEDIR, 0777 | S_ISVTX); // World writable as well as sticky bit.
-		mkdir(dirname, 0755);
-		chdir(dirname);
-		umask(0000);
-		if (mkfifo(FIFONAME, 0666) == -1) {
-			fprintf(stderr, "%s\n", "Error creating named pipe!");
-			exit(1);
+		for (rp = result; rp != NULL; rp = rp->ai_next) {
+			sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+			if (sfd == -1) continue;
+			if (bind(sfd, rp->ai_addr, rp->ai_addrlen) == 0) break;
+			close(sfd);
 		}
-		printf("Waiting for an oponent to join, Game ID: %d\n", game_id);
-		fifo_fd = open(FIFONAME, O_RDONLY); // Execution will block here, until the other player opens the pipe for writing
 
-		close(fifo_fd);
+		if (rp == NULL) {
+			fprintf(stderr, "bind() failure!\n");
+			exit(EXIT_FAILURE);
+		}
+	
+		if ((listen(sfd, 1)) != 0) {
+			fprintf(stderr, "listen() failure!\n");
+			exit(EXIT_FAILURE); 
+		}
+	
+		printf("Waiting for an oponent to join, listening on: %s:%s\n", hostname, port);
+		
+		cfd = accept(sfd, rp->ai_addr, &rp->ai_addrlen); // Will block here until the opponent has connected
+		if (cfd < 0) {
+			fprintf(stderr, "accept() failure!\n");
+			exit(EXIT_FAILURE); 
+		}
 	}
 	else {
-		chdir(dirname);
-		fifo_fd = open(FIFONAME, O_WRONLY); // Open the pipe to unblock the other players process
-		if (fifo_fd == -1) {
-			fprintf(stderr, "Invalid game ID!\n");
-			exit(1);
+		for (rp = result; rp != NULL; rp = rp->ai_next) {
+			cfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+			if (cfd == -1) continue;
+			if (connect(cfd, rp->ai_addr, rp->ai_addrlen) != -1) break;
+			close(cfd);
 		}
-		close(fifo_fd);
-	}
+			
+		if (rp == NULL) {
+			fprintf(stderr, "connect() failure!\n");
+			exit(EXIT_FAILURE);
+		}
+	 }
 
+	freeaddrinfo(result);
+	
 	// Starting the game...
-	pthread_create(&clock_thread, NULL, update_clock, (void *)&clock_thread);
+	pthread_create(&clock_thread, NULL, update_clock, NULL);
 	initialize_board();
 
 	while (true) {
 		update();
 
 		if (status == WAITING) { // Block until other player makes move
-			wait(FIFONAME, &selection);
+			wait(cfd);
 			status = MY_TURN;
 			CLEAR_STDIN();
 		}
@@ -152,10 +166,8 @@ int play(const bool is_white, const int game_id) {
 				if (c == '\n') {
 					if ((status = move_piece(&selection, color)) == 0) {
 						update();
-						fifo_fd = open(FIFONAME, O_WRONLY);
-						char buf[4] = {selection.src->i, selection.src->j, selection.dst->i, selection.dst->j};
-						write(fifo_fd, buf, sizeof(buf));
-						close(fifo_fd);
+						char buf[BSIZE] = {selection.src->i, selection.src->j, selection.dst->i, selection.dst->j};
+						write(cfd, buf, sizeof(buf));
 					}
 
 					selected = false;

@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <string.h>
 
 #include <termios.h> //termios, TCSANOW, ECHO, ICANON
 #include <unistd.h> //STDIN_FILENO
@@ -19,6 +20,22 @@
 #include "board.h"
 
 #define BSIZE 4
+#define LOSEMSG "lll"
+#define WINMSG "www"
+
+#define LOSEBANNER "\
+############\n\
+#          #\n\
+# YOU LOSE #\n\
+#          #\n\
+############\n"
+
+#define WINBANNER "\
+###########\n\
+#         #\n\
+# YOU WIN #\n\
+#         #\n\
+###########\n"
 
 static const char *status_str[] = {
 	"\n## Waiting for the other player... ##",
@@ -27,18 +44,25 @@ static const char *status_str[] = {
 	"\n## Cannot move due to check condition. ##"
 };
 
-int clocks[2] = {600, 600};
+int clocks[2];
 Color color;
 Status status;
 Move selection;
 bool selected;
+int cfd;
+pthread_t clock_thread;
+
+static void lose() {
+	if (cfd > 2) write(cfd, LOSEMSG, BSIZE);
+	printf(LOSEBANNER);
+	exit(0);
+}
 
 static void update() {
 	system("clear");
 	printf("White: %d:%02d; Black: %d:%02d\n\n", clocks[WHITE] / 60, clocks[WHITE] % 60, clocks[BLACK] / 60, clocks[BLACK] % 60);
 	print_board(&selection, color, selected);
 	printf("%s\n", status_str[status]);
-
 }
 
 static void *update_clock(void *vargs) { // Periodically run to update the clock and re-display the screen
@@ -48,13 +72,24 @@ static void *update_clock(void *vargs) { // Periodically run to update the clock
 
 		if (status == WAITING) clocks[!color]--;
 		else clocks[color]--;
+		if (clocks[color] < 0) {
+			lose();
+			break;
+		}
 	}
 	return NULL;
 }
 
-static void wait(const int cfd) {
+static void wait() {
 	char buf[BSIZE];
 	read(cfd, buf, sizeof(buf));
+
+	if (strcmp(buf, LOSEMSG) == 0) {
+		pthread_cancel(clock_thread);
+		printf(WINBANNER);
+		exit(0);
+	}
+
 	read_op_move(buf, !color);
 }
 
@@ -67,16 +102,17 @@ int play(const bool is_white, const char *hostname, const char *port) {
 	Pos pointed = {0, 0};
 	selection.src = &marked;
 	selection.dst = &pointed;
+	clocks[0] = 600;
+	clocks[1] = 600;
 	char c;
 	int increment;
 	selected = false;
 	increment = color * 2 - 1;
-	pthread_t clock_thread;
 
 	// Name resolution as shown in getaddrinfo(3)
 	struct addrinfo hints;
 	struct addrinfo *result, *rp;
-	int sfd, cfd, s;
+	int sfd, s;
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;

@@ -4,6 +4,8 @@
 #include "board.h"
 #include "move_validation.h"
 
+// my_move -> My current move that is being tested
+// op_move oponents last move
 
 bool is_valid_move_pawn_white(const Move *my_move, const Move *op_move) {
 	if (my_move->src->i >= my_move->dst->i) return false;
@@ -12,9 +14,10 @@ bool is_valid_move_pawn_white(const Move *my_move, const Move *op_move) {
 			if (pieceat(my_move->dst) != EMPTY) return false;
 		}
 		else if (abs(my_move->dst->j - my_move->src->j) == 1) {
-			/*if (op_my_move != NULL && my_move->src->i == 4 && op_my_move_piece.type == PAWN_B && op_my_move->src->i == 6 && op_my_move->dst->i == 4 && abs(my_move->src->j - op_my_move->dst->j) == 1) {  // En passant
+			if (my_move->src->i == 4 && pieceat(op_move->dst) == PAWN_B && op_move->src->i == 6 && op_move->dst->i == 4 && my_move->dst->j == op_move->dst->j) {  // En passant
+				setpiece(op_move->dst, EMPTY);
 				return true;
-			}*/
+			}
 			if (pieceat(my_move->dst) == EMPTY) return false;
 		}
 		else return false;
@@ -27,10 +30,6 @@ bool is_valid_move_pawn_white(const Move *my_move, const Move *op_move) {
 	return true;
 }
 
-bool checked(const Color c) {
-	return false;
-}
-
 
 bool is_valid_move_pawn_black(const Move *my_move, const Move *op_move) {
 	if (my_move->src->i <= my_move->dst->i) return false;
@@ -39,10 +38,11 @@ bool is_valid_move_pawn_black(const Move *my_move, const Move *op_move) {
 			if (pieceat(my_move->dst) != EMPTY) return false;
 		}
 		else if (abs(my_move->dst->j - my_move->src->j) == 1) {
-			/*if (op_my_move != NULL && my_move->src->i == 4 && op_my_move_piece.type == PAWN_B && op_my_move->src->i == 6 && op_my_move->dst->i == 4 && abs(my_move->src->j - op_my_move->dst->j) == 1) {  // En passant
+			if (my_move->src->i == 3 && pieceat(op_move->dst) == PAWN_W && op_move->src->i == 1 && op_move->dst->i == 3 && my_move->dst->j == op_move->dst->j) {  // En passant
+				setpiece(op_move->dst, EMPTY);
 				return true;
-			}*/
-			if (pieceat(my_move->src) == EMPTY) return false;
+			}
+			if (pieceat(my_move->dst) == EMPTY) return false;
 		}
 		else return false;
 	}

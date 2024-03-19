@@ -48,6 +48,9 @@ int clocks[2];
 Color color;
 Status status;
 Move selection;
+Pos op_move_src = {0, 0};
+Pos op_move_dst = {0, 0};
+Move op_move = {&op_move_src, &op_move_dst};
 bool selected;
 int cfd;
 pthread_t clock_thread;
@@ -61,7 +64,7 @@ static void lose() {
 static void update() {
 	system("clear");
 	printf("White: %d:%02d; Black: %d:%02d\n\n", clocks[WHITE] / 60, clocks[WHITE] % 60, clocks[BLACK] / 60, clocks[BLACK] % 60);
-	print_board(&selection, color, selected);
+	print_board(&selection, &op_move, color, selected);
 	printf("%s\n", status_str[status]);
 }
 
@@ -83,6 +86,10 @@ static void *update_clock(void *vargs) { // Periodically run to update the clock
 static void wait() {
 	char buf[BSIZE];
 	read(cfd, buf, sizeof(buf));
+	op_move.src->i = buf[0];
+	op_move.src->j = buf[1];
+	op_move.dst->i = buf[2];
+	op_move.dst->j = buf[3];
 
 	if (strcmp(buf, LOSEMSG) == 0) {
 		pthread_cancel(clock_thread);
@@ -90,7 +97,7 @@ static void wait() {
 		exit(0);
 	}
 
-	read_op_move(buf, !color);
+	move_piece(&op_move, &selection, !color);
 }
 
 int play(const bool is_white, const char *hostname, const char *port) {
@@ -200,7 +207,7 @@ int play(const bool is_white, const char *hostname, const char *port) {
 
 			if (selected) {
 				if (c == '\n') {
-					if ((status = move_piece(&selection, color)) == 0) {
+					if ((status = move_piece(&selection, &op_move, color)) == 0) {
 						update();
 						char buf[BSIZE] = {selection.src->i, selection.src->j, selection.dst->i, selection.dst->j};
 						write(cfd, buf, sizeof(buf));

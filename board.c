@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "board.h"
 #include "move_validation.h"
@@ -51,14 +52,14 @@ bool (*is_valid_move[13]) (const Move *, const Move *) = {
 
 Piece board[BOARD_SIZE][BOARD_SIZE];
 
-Pos p1 = {0, 0};
-Pos p2 = {0, 0};
-Move op_move = {&p1, &p2};
-
 int move_counter;
 
 Piece pieceat(const Pos *p) {
 	return board[p->i][p->j];
+}
+
+void setpiece(const Pos *pos, const Piece p) {
+	board[pos->i][pos->j] = p;
 }
 
 Piece pieceatindex(const int i, const int j) {
@@ -70,15 +71,6 @@ int get_color(const Piece piece) {
 	if (piece >= KING_W && piece <= PAWN_W) return WHITE;
 	return -1; // This is for when the "Piece" is an empty square
 }
-
-void read_op_move(char buf[4], const Color color) {
-	op_move.src->i = buf[0];
-	op_move.src->j = buf[1];
-	op_move.dst->i = buf[2];
-	op_move.dst->j = buf[3];
-	move_piece(&op_move, color);
-}
-
 
 void initialize_board() {
 	int i, j;
@@ -115,7 +107,7 @@ void initialize_board() {
 	move_counter = 0;
 }
 
-void print_board(const Move *move, const Color color, const bool selected) {
+void print_board(const Move *move, const Move *op_move, const Color color, const bool selected) {
 	Pos ind; // indeces
 	int i, j;
 	char buf[4];
@@ -148,12 +140,12 @@ void print_board(const Move *move, const Color color, const bool selected) {
 				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
 				printf("%s]", POINTER_COLOR[square_color]);
 			}
-			else if (move_counter > color && ind.i == op_move.src->i && ind.j == op_move.src->j) {
+			else if (move_counter > color && ind.i == op_move->src->i && ind.j == op_move->src->j) {
 				printf("%s[", OP_SELECTION_COLOR[square_color]);
 				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
 				printf("%s]", OP_SELECTION_COLOR[square_color]);
 			}
-			else if (move_counter > color && ind.i == op_move.dst->i && ind.j == op_move.dst->j) {
+			else if (move_counter > color && ind.i == op_move->dst->i && ind.j == op_move->dst->j) {
 				printf("%s[", OP_POINTER_COLOR[square_color]);
 				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
 				printf("%s]", OP_POINTER_COLOR[square_color]);
@@ -174,7 +166,7 @@ void print_board(const Move *move, const Color color, const bool selected) {
 }
 
 
-static bool threatened(Pos* pos, const Color color) { // Checks whether any piece with color "color" threatens the position "pos"
+static bool threatened(Pos* pos, const Color color, const Move *op_move) { // Checks whether any piece with color "color" threatens the position "pos"
 	int i, j;
 	Piece p;
 	Pos src;
@@ -186,7 +178,7 @@ static bool threatened(Pos* pos, const Color color) { // Checks whether any piec
 			src.i = i;
 			src.j = j;
 			if (get_color(p) == color) {
-				if (is_valid_move[p](&mv, &op_move)) return true;
+				if (is_valid_move[p](&mv, op_move)) return true;
 			}
 		}
 	}
@@ -195,7 +187,7 @@ static bool threatened(Pos* pos, const Color color) { // Checks whether any piec
 }
 
 
-static bool checked(const Color color) { // Checks whether the player with color "color" is checked
+static bool checked(const Color color, const Move *op_move) { // Checks whether the player with color "color" is checked
 	int i, j;
 	Pos pos;
 
@@ -204,7 +196,7 @@ static bool checked(const Color color) { // Checks whether the player with color
 			pos.i = i;
 			pos.j = j;
 			if ((color == WHITE && pieceat(&pos) == KING_W) || (color == BLACK && pieceat(&pos) == KING_B)) {
-				return threatened(&pos, !color);
+				return threatened(&pos, !color, op_move);
 			}
 		}
 	}
@@ -213,24 +205,17 @@ static bool checked(const Color color) { // Checks whether the player with color
 }
 
 
-Status move_piece(const Move *move, const Color color) {
+Status move_piece(const Move *move, const Move *op_move, const Color color) {
 	Piece taker = board[move->src->i][move->src->j];
 	Piece taken = board[move->dst->i][move->dst->j];
 
-	Pos p1, p2;
-	p1.i = p1.j = 0;
-	p2.i = p2.j = 0;
-	Move op_move;
-	op_move.src = &p1;
-	op_move.dst = &p2;
-
 	if (get_color(taker) != color || get_color(taken) == color) return BAD_MOVE;
-	if (!is_valid_move[taker](move, &op_move)) return BAD_MOVE;
+	if (!is_valid_move[taker](move, op_move)) return BAD_MOVE;
 	
 	board[move->dst->i][move->dst->j] = taker;
 	board[move->src->i][move->src->j] = EMPTY;
 	
-	if (checked(color)) {
+	if (checked(color, op_move)) {
 		board[move->src->i][move->src->j] = taker;
 		board[move->dst->i][move->dst->j] = taken;
 		return CHECKED;

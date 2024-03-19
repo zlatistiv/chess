@@ -51,14 +51,14 @@ typedef enum {
 
 void initialize_board();
 
-void print_board(const Move *, const Color, const bool selected);
+void print_board(const Move *, const Move *, const Color, const bool selected);
 
-Status move_piece(const Move *, const Color);
+Status move_piece(const Move *, const Move *, const Color);
 
 Piece pieceat(const Pos *);
 
 Piece pieceatindex(const int i, const int j);
 
-void read_op_move(char buf[4], const Color color);
+void setpiece(const Pos *, const Piece);
 
 #endif

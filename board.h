@@ -3,8 +3,9 @@
 
 
 #define BACKGROUND_DEFAULT "\033[37m\033[40m"
-
 #define BOARD_SIZE 8
+
+#define HISTSIZE 4096 // Max number of moves that will be stored in the history
 
 // This is used for the player color
 typedef enum {
@@ -20,8 +21,8 @@ typedef struct {
 
 // This is the structure of a move; It contains the source and destination positions
 typedef struct {
-	Pos *src;
-	Pos *dst;
+	Pos src;
+	Pos dst;
 } Move;
 
 // This enumerates the pieces; When you add each one to the character at index [2] of the BASE string you get the string of that piece

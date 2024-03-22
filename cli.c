@@ -47,10 +47,8 @@ static const char *status_str[] = {
 int clocks[2];
 Color color;
 Status status;
-Move selection;
-Pos op_move_src = {0, 0};
-Pos op_move_dst = {0, 0};
-Move op_move = {&op_move_src, &op_move_dst};
+Move selection = {.src = {0, 0}, .dst = {0, 0}};
+Move op_move = {.src = {0, 0}, .dst = {0, 0}};
 bool selected;
 int cfd;
 pthread_t clock_thread;
@@ -86,10 +84,10 @@ static void *update_clock(void *vargs) { // Periodically run to update the clock
 static void wait() {
 	char buf[BSIZE];
 	read(cfd, buf, sizeof(buf));
-	op_move.src->i = buf[0];
-	op_move.src->j = buf[1];
-	op_move.dst->i = buf[2];
-	op_move.dst->j = buf[3];
+	op_move.src.i = buf[0];
+	op_move.src.j = buf[1];
+	op_move.dst.i = buf[2];
+	op_move.dst.j = buf[3];
 
 	if (strcmp(buf, LOSEMSG) == 0) {
 		pthread_cancel(clock_thread);
@@ -105,10 +103,6 @@ int play(const bool is_white, const char *hostname, const char *port) {
 
 	color = is_white;
 	status = color;
-	Pos marked = {0, 0};
-	Pos pointed = {0, 0};
-	selection.src = &marked;
-	selection.dst = &pointed;
 	clocks[0] = 600;
 	clocks[1] = 600;
 	char c;
@@ -192,16 +186,16 @@ int play(const bool is_white, const char *hostname, const char *port) {
 			c = tolower(getchar());
 			switch (c) {
 				case 'w':
-					pointed.i += increment;
+					selection.dst.i += increment;
 					break;
 				case 'a':
-					pointed.j -= increment;
+					selection.dst.j -= increment;
 					break;
 				case 's':
-					pointed.i -= increment;
+					selection.dst.i -= increment;
 					break;
 				case 'd':
-					pointed.j += increment;
+					selection.dst.j += increment;
 					break;
 			}
 
@@ -209,7 +203,7 @@ int play(const bool is_white, const char *hostname, const char *port) {
 				if (c == '\n') {
 					if ((status = move_piece(&selection, &op_move, color)) == 0) {
 						update();
-						char buf[BSIZE] = {selection.src->i, selection.src->j, selection.dst->i, selection.dst->j};
+						char buf[BSIZE] = {selection.src.i, selection.src.j, selection.dst.i, selection.dst.j};
 						write(cfd, buf, sizeof(buf));
 					}
 
@@ -220,8 +214,8 @@ int play(const bool is_white, const char *hostname, const char *port) {
 				}
 			}
 			else if (c == '\n') {
-				marked.i = pointed.i;
-				marked.j = pointed.j;
+				selection.src.i = selection.dst.i;
+				selection.src.j = selection.dst.j;
 				selected = true;
 			}
 		}

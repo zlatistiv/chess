@@ -51,6 +51,7 @@ bool (*is_valid_move[13]) (const Move *, const Move *) = {
 
 
 Piece board[BOARD_SIZE][BOARD_SIZE];
+Move *move_history;
 
 int move_counter;
 
@@ -105,6 +106,7 @@ void initialize_board() {
 	}
 
 	move_counter = 0;
+	move_history = malloc(HISTSIZE * sizeof(Move));
 }
 
 void print_board(const Move *move, const Move *op_move, const Color color, const bool selected) {
@@ -130,22 +132,22 @@ void print_board(const Move *move, const Move *op_move, const Color color, const
 
 			square_color = (ind.i + ind.j) % 2 != 0;
 
-			if (selected && ind.i == move->src->i && ind.j == move->src->j) {
+			if (selected && ind.i == move->src.i && ind.j == move->src.j) {
 				printf("%s[", SELECTION_COLOR[square_color]);
 				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
 				printf("%s]", SELECTION_COLOR[square_color]);
 			}
-			else if (ind.i == move->dst->i && ind.j == move->dst->j) {
+			else if (ind.i == move->dst.i && ind.j == move->dst.j) {
 				printf("%s[", POINTER_COLOR[square_color]);
 				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
 				printf("%s]", POINTER_COLOR[square_color]);
 			}
-			else if (move_counter > color && ind.i == op_move->src->i && ind.j == op_move->src->j) {
+			else if (move_counter > color && ind.i == op_move->src.i && ind.j == op_move->src.j) {
 				printf("%s[", OP_SELECTION_COLOR[square_color]);
 				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
 				printf("%s]", OP_SELECTION_COLOR[square_color]);
 			}
-			else if (move_counter > color && ind.i == op_move->dst->i && ind.j == op_move->dst->j) {
+			else if (move_counter > color && ind.i == op_move->dst.i && ind.j == op_move->dst.j) {
 				printf("%s[", OP_POINTER_COLOR[square_color]);
 				printf("%s%s", BACKGROUND_COLOR[square_color], buf);
 				printf("%s]", OP_POINTER_COLOR[square_color]);
@@ -169,14 +171,13 @@ void print_board(const Move *move, const Move *op_move, const Color color, const
 static bool threatened(Pos* pos, const Color color, const Move *op_move) { // Checks whether any piece with color "color" threatens the position "pos"
 	int i, j;
 	Piece p;
-	Pos src;
-	Move mv = {&src, pos};
+	Move mv = {.src = {0, 0}, .dst = {pos->i, pos->j}};
 
 	for (i = 0; i < BOARD_SIZE; i++) {
 		for (j = 0; j < BOARD_SIZE; j++) {
 			p = pieceatindex(i, j);
-			src.i = i;
-			src.j = j;
+			mv.src.i = i;
+			mv.src.j = j;
 			if (get_color(p) == color) {
 				if (is_valid_move[p](&mv, op_move)) return true;
 			}
@@ -206,21 +207,22 @@ static bool checked(const Color color, const Move *op_move) { // Checks whether 
 
 
 Status move_piece(const Move *move, const Move *op_move, const Color color) {
-	Piece taker = board[move->src->i][move->src->j];
-	Piece taken = board[move->dst->i][move->dst->j];
+	Piece taker = board[move->src.i][move->src.j];
+	Piece taken = board[move->dst.i][move->dst.j];
 
 	if (get_color(taker) != color || get_color(taken) == color) return BAD_MOVE;
 	if (!is_valid_move[taker](move, op_move)) return BAD_MOVE;
 	
-	board[move->dst->i][move->dst->j] = taker;
-	board[move->src->i][move->src->j] = EMPTY;
+	board[move->dst.i][move->dst.j] = taker;
+	board[move->src.i][move->src.j] = EMPTY;
 	
 	if (checked(color, op_move)) {
-		board[move->src->i][move->src->j] = taker;
-		board[move->dst->i][move->dst->j] = taken;
+		board[move->src.i][move->src.j] = taker;
+		board[move->dst.i][move->dst.j] = taken;
 		return CHECKED;
 	}
 	
-	move_counter++;
+	memcpy(move_history + (move_counter++ % HISTSIZE), move, sizeof(Move)); // Store move in the history ring buffer
+	
 	return 0;
 }

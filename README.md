@@ -12,3 +12,5 @@ Second player joins:
 ```
 nikola@nameless:~/Code/chess $ ./chess -j localhost 2222
 ```
+
+You might want to increase font size of your terminal to see the pieces better.

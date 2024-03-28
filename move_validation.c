@@ -3,6 +3,7 @@
 
 #include "board.h"
 #include "move_validation.h"
+#include <stdio.h>
 
 // my_move -> My current move that is being tested
 // op_move oponents last move
@@ -134,14 +135,50 @@ bool is_valid_move_queen(const Move *my_move, const Move *op_move) {
 }
 
 bool is_valid_move_king_white(const Move *my_move, const Move *op_move) {
-	if (abs(my_move->dst.i - my_move->src.i) > 1 || abs(my_move->dst.j - my_move->src.j) > 1) return false;
-
+	if (my_move->src.i == 0 && my_move->src.j == 4 && my_move->dst.i == 0) {
+		if (my_move->dst.j == 2) {
+			if (has_moved(my_move->src)) return false;
+			if (pieceatindex(0, 1) != EMPTY || pieceatindex(0, 2) != EMPTY || pieceatindex(0, 3) != EMPTY) return false;
+			if (threatened_index(0, 2, BLACK, op_move) || threatened_index(0, 3, BLACK, op_move) || threatened_index(0, 4, BLACK, op_move)) return false;
+			setpiece_index(0, 0, EMPTY);
+			setpiece_index(0, 3, ROOK_W);
+			return true;
+		}
+		else if (my_move->dst.j == 6) {
+			if (has_moved(my_move->src)) return false;
+			if (pieceatindex(0, 6) != EMPTY || pieceatindex(0, 5) != EMPTY) return false;
+			if (threatened_index(0, 6, BLACK, op_move) || threatened_index(0, 4, BLACK, op_move)) return false;
+			setpiece_index(0, 7, EMPTY);
+			setpiece_index(0, 5, ROOK_W);	
+			return true;
+		}
+		else return false;
+	}
+	else if (abs(my_move->dst.i - my_move->src.i) > 1 || abs(my_move->dst.j - my_move->src.j) > 1) return false;
 	return true;
 }
 
 bool is_valid_move_king_black(const Move *my_move, const Move *op_move) {
-	if (abs(my_move->dst.i - my_move->src.i) > 1 || abs(my_move->dst.j - my_move->src.j) > 1) return false;
-
+	if (my_move->src.i == 7 && my_move->src.j == 4 && my_move->dst.i == 7) {
+		if (my_move->dst.j == 2) {
+			if (has_moved(my_move->src)) return false;
+			if (pieceatindex(7, 1) != EMPTY || pieceatindex(7, 2) != EMPTY || pieceatindex(7, 3) != EMPTY) return false;
+			if (threatened_index(7, 2, WHITE, op_move) || threatened_index(7, 3, WHITE, op_move) || threatened_index(7, 4, WHITE, op_move)) return false;
+			setpiece_index(7, 0, EMPTY);
+			setpiece_index(7, 3, ROOK_B);
+			return true;
+		}
+		else if (my_move->dst.j == 6) {
+			if (has_moved(my_move->src)) return false;
+			if (pieceatindex(7, 6) != EMPTY || pieceatindex(7, 5) != EMPTY) return false;
+			if (threatened_index(7, 6, WHITE, op_move) || threatened_index(7, 4, WHITE, op_move)) return false;
+			setpiece_index(7, 7, EMPTY);
+			setpiece_index(7, 5, ROOK_B);	
+			return true;
+		}
+		else return false;
+	}
+	else if (abs(my_move->dst.i - my_move->src.i) > 1 || abs(my_move->dst.j - my_move->src.j) > 1) return false;
 	return true;
 }
 

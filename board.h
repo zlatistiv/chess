@@ -62,4 +62,12 @@ Piece pieceatindex(const int i, const int j);
 
 void setpiece(const Pos *, const Piece);
 
+void setpiece_index(int, int, const Piece);
+
+bool has_moved(const Pos);
+
+bool threatened(const Pos*, const Color, const Move *);
+
+bool threatened_index(int, int, const Color, const Move *);
+
 #endif

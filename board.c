@@ -40,7 +40,7 @@ bool (*is_valid_move[13]) (const Move *, const Move *) = {
 	is_valid_move_bishop,
 	is_valid_move_knight,
 	is_valid_move_pawn_black,
-	is_valid_move_king_black,
+	is_valid_move_king_white,
 	is_valid_move_queen,
 	is_valid_move_rook,
 	is_valid_move_bishop,
@@ -63,6 +63,10 @@ void setpiece(const Pos *pos, const Piece p) {
 	board[pos->i][pos->j] = p;
 }
 
+void setpiece_index(int i, int j, const Piece p) {
+	board[i][j] = p;
+}
+
 Piece pieceatindex(const int i, const int j) {
 	return board[i][j];
 }
@@ -71,6 +75,17 @@ int get_color(const Piece piece) {
 	if (piece >= KING_B && piece <= PAWN_B) return BLACK;
 	if (piece >= KING_W && piece <= PAWN_W) return WHITE;
 	return -1; // This is for when the "Piece" is an empty square
+}
+
+bool has_moved(const Pos p) { // Returns true if p is contained anywhere in the move_history ring buffer
+	Move *mp;
+	int size = move_counter > HISTSIZE ? HISTSIZE : move_counter;
+	for (mp = move_history; mp != move_history + size; mp++) {
+		if ((p.i == mp->dst.i && p.j == mp->dst.j) || (p.i == mp->src.i && p.j == mp->src.j)) return true;
+		// printf("p.i = %d, mp->dst.i = %d, p.j = %d, mp->dst.j = %d, p.i = %d, mp->src.i = %d, p.j = %d, mp->src.j = %d\n", p.i, mp->dst.i, p.j, mp->dst.j, p.i, mp->src.i, p.j, mp->src.j);
+	}
+	// exit(1);
+	return false;
 }
 
 void initialize_board() {
@@ -168,10 +183,30 @@ void print_board(const Move *move, const Move *op_move, const Color color, const
 }
 
 
-static bool threatened(Pos* pos, const Color color, const Move *op_move) { // Checks whether any piece with color "color" threatens the position "pos"
+bool threatened(const Pos* pos, const Color color, const Move *op_move) { // Checks whether any piece with color "color" threatens the position "pos"
 	int i, j;
 	Piece p;
 	Move mv = {.src = {0, 0}, .dst = {pos->i, pos->j}};
+
+	for (i = 0; i < BOARD_SIZE; i++) {
+		for (j = 0; j < BOARD_SIZE; j++) {
+			p = pieceatindex(i, j);
+			mv.src.i = i;
+			mv.src.j = j;
+			if (get_color(p) == color) {
+				if (is_valid_move[p](&mv, op_move)) return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+
+bool threatened_index(int pos_i, int pos_j, const Color color, const Move *op_move) { // Checks whether any piece with color "color" threatens the indeces i, j
+	int i, j;
+	Piece p;
+	Move mv = {.src = {0, 0}, .dst = {pos_i, pos_j}};
 
 	for (i = 0; i < BOARD_SIZE; i++) {
 		for (j = 0; j < BOARD_SIZE; j++) {

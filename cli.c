@@ -98,10 +98,10 @@ static void wait() {
 	move_piece(&op_move, &selection, !color);
 }
 
-int play(const bool is_white, const char *hostname, const char *port) {
+int game_main(const Color col, const char *hostname, const char *port) {
 	SETUP_SHELL();
 
-	color = is_white;
+	color = col;
 	status = color;
 	clocks[0] = 600;
 	clocks[1] = 600;
@@ -174,6 +174,7 @@ int play(const bool is_white, const char *hostname, const char *port) {
 	pthread_create(&clock_thread, NULL, update_clock, NULL);
 	initialize_board();
 
+	// Main game loop
 	while (true) {
 		update();
 
@@ -186,21 +187,25 @@ int play(const bool is_white, const char *hostname, const char *port) {
 			c = tolower(getchar());
 			switch (c) {
 				case 'w':
+				case 'k':
 					selection.dst.i += increment;
 					break;
 				case 'a':
+				case 'h':
 					selection.dst.j -= increment;
 					break;
 				case 's':
+				case 'j':
 					selection.dst.i -= increment;
 					break;
 				case 'd':
+				case 'l':
 					selection.dst.j += increment;
 					break;
 			}
 
 			if (selected) {
-				if (c == '\n') {
+				if (c == '\n' || c == ' ') {
 					if ((status = move_piece(&selection, &op_move, color)) == 0) {
 						update();
 						char buf[BSIZE] = {selection.src.i, selection.src.j, selection.dst.i, selection.dst.j};
@@ -209,11 +214,11 @@ int play(const bool is_white, const char *hostname, const char *port) {
 
 					selected = false;
 				}
-				else if (c == 'c') {
+				else if (c == 'c' || c == ' ') {
 					selected = false;
 				}
 			}
-			else if (c == '\n') {
+			else if (c == '\n' || c == ' ') {
 				selection.src.i = selection.dst.i;
 				selection.src.j = selection.dst.j;
 				selected = true;

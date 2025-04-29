@@ -1,17 +1,12 @@
 #ifndef BOARD_H
 #define BOARD_H
+#include "cli.h"
 
 
 #define BACKGROUND_DEFAULT "\033[37m\033[40m"
 #define BOARD_SIZE 8
 
 #define HISTSIZE 4096 // Max number of moves that will be stored in the history
-
-// This is used for the player color
-typedef enum {
-	BLACK = 0,
-	WHITE = 1
-} Color;
 
 // This struct is a position on the board; i is the vertical index, j is the horizontal index
 typedef struct {

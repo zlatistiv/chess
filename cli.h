@@ -1,8 +1,13 @@
 #ifndef CLI_H
 #define CLI_H
 
+typedef enum {
+        BLACK = 0,
+        WHITE = 1
+} Color;
 
-int play(const bool, const char *, const char *);
+
+int game_main(const Color, const char *, const char *);
 
 // How to read input without pressing Enter (needed for this game):
 // https://stackoverflow.com/questions/1798511/how-to-avoid-pressing-enter-with-getchar-for-reading-a-single-character-only
@@ -42,3 +47,4 @@ int play(const bool, const char *, const char *);
 	close(stdin_copy); \
 
 #endif
+
